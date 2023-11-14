@@ -1,6 +1,6 @@
 (ns org.lotuc.akka-clojure-test
   (:require [clojure.test :refer :all]
-            [org.lotuc.akka-clojure :refer [! actor-system ask make-behavior spawn tell]])
+            [org.lotuc.akka-clojure :refer [! actor-system ask make-behavior spawn tell self]])
   (:import
    (java.time Duration)
    (akka.actor.typed.javadsl Behaviors)))
@@ -26,7 +26,7 @@
 (defn greeter-main []
   (let [!greeter (atom nil)]
     (make-behavior
-     (fn [{:keys [whom exp]}]
+     (fn [{:keys [whom exp ask-self] :as m}]
        (cond
          ;; start a bot for greeter
          whom
@@ -37,18 +37,26 @@
          exp
          (! (apply (case (keyword (first exp))
                      :+ + :- - :* * :/ /)
-                   (rest exp)))))
+                   (rest exp)))
+
+         ask-self
+         (let [f (bound-fn* #(deref (ask (self) {:exp '(* 6 7)} (Duration/ofSeconds 1))))]
+           (future (println "ask within behavior: 6 * 7 =" (f)))
+           nil)))
      (fn []
        ;; initialize greeter
        (reset! !greeter (spawn (greeter) "greeter"))))))
 
 (comment
   (def hello-system (actor-system (greeter-main) "helloakka"))
+
   (tell hello-system {:whom "42"})
 
   @(ask hello-system
         {:exp '(+ 40 2)}
         (Duration/ofSeconds 1)
         (.scheduler hello-system))
+
+  (tell hello-system {:ask-self true})
 
   (.terminate hello-system))
