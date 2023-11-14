@@ -1,6 +1,47 @@
-(ns org.lotuc.akka-clojure)
+(ns org.lotuc.akka-clojure
+  (:import
+   (akka.actor.typed ActorSystem)
+   (org.lotuc ClojureBehavior)
+   (org.lotuc ClojureBehavior$Message)
+   (akka.actor.typed.javadsl AskPattern)))
 
-(defn foo
-  "I don't do a whole lot."
-  [x]
-  (prn x "Hello, World!"))
+;;; available in sync-setup & message-handler
+(def ^:dynamic *context* nil)
+;;; available in message-handler
+(def ^:dynamic *reply-to* nil)
+
+(defmacro !
+  ([msg]
+   `(when *reply-to* (! *reply-to* ~msg)))
+  ([target msg]
+   `(! ~target (when *context* (.self *context*)) ~msg))
+  ([target reply-to msg]
+   `(.tell ~target (ClojureBehavior$Message. ~msg ~reply-to))))
+
+(defn tell [actor msg]
+  (! actor msg))
+
+(defmacro spawn
+  [behavior n]
+  `(when *context* (.spawn *context* ~behavior ~n)))
+
+(defmacro make-behavior
+  ([message-handler] `(ClojureBehavior/create ~message-handler))
+  ([message-handler sync-setup] `(ClojureBehavior/create ~message-handler ~sync-setup)))
+
+(defn actor-system [guardian-behavior name]
+  (ActorSystem/create guardian-behavior name))
+
+(defn ask
+  [actor msg duration scheduler]
+  (future
+    (-> (AskPattern/ask
+         actor
+         (reify akka.japi.function.Function
+           (apply [_ reply]
+             (ClojureBehavior$Message. msg reply)))
+         duration
+         scheduler)
+        (.toCompletableFuture)
+        (.get)
+        (.content))))

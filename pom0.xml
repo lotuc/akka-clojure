@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <description>Akka Clojure</description>
+  <url>https://github.com/lotuc/akka-clojure</url>
+  <licenses>
+    <license>
+      <name>The MIT License</name>
+      <url>https://opensource.org/license/mit</url>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <name>Lotuc</name>
+    </developer>
+  </developers>
+  <build>
+    <sourceDirectory>src</sourceDirectory>
+  </build>
+  <distributionManagement>
+    <repository>
+      <id>clojars</id>
+      <name>Clojars repository</name>
+      <url>https://clojars.org/repo</url>
+    </repository>
+  </distributionManagement>
+</project>
