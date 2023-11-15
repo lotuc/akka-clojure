@@ -1,63 +1,40 @@
 (ns org.lotuc.akka-clojure
   (:import
-   (akka.actor.typed ActorSystem)
-   (org.lotuc ClojureBehavior)
-   (org.lotuc ClojureBehavior$Message)
-   (akka.actor.typed.javadsl AskPattern)))
+   (akka.actor.typed.javadsl Behaviors)
+   (akka.actor.typed Behavior)))
 
-;;; available in sync-setup & message-handler
-(def ^:dynamic *context* nil)
-;;; available in message-handler
-(def ^:dynamic *reply-to* nil)
+(defn- ->behavior
+  [v & {:keys [nil-behavior]
+        :or {nil-behavior (Behaviors/same)}}]
+  (cond
+    (nil? v)
+    nil-behavior
 
-(defmacro check-context []
-  `(when-not *context*
-     (throw (RuntimeException. "not behavior context - scheduler required"))))
+    (keyword? v)
+    (case v
+      :same    (Behaviors/same)
+      :stopped (Behaviors/stopped)
+      :empty   (Behaviors/empty)
+      (throw (ex-info (str "unkown behavior: " v) {:value v})))
 
-(defmacro !
-  ([msg]
-   `(when *reply-to* (! *reply-to* ~msg)))
-  ([target msg]
-   `(! ~target (when *context* (.self *context*)) ~msg))
-  ([target reply-to msg]
-   `(.tell ~target (ClojureBehavior$Message. ~msg ~reply-to))))
+    (instance? Behavior v)
+    v
 
-(defn self []
-  (check-context)
-  (.self *context*))
+    :else
+    (throw (ex-info (str "invalid behavior: " (class v)) {:value v}))))
 
-(defn scheduler []
-  (check-context)
-  (.. *context* getSystem scheduler))
+(defn setup [factory]
+  (Behaviors/setup
+   (reify akka.japi.function.Function
+     (apply [_ ctx] (->behavior (factory ctx) :nil-behavior (Behaviors/empty))))))
 
-(defn tell [actor msg]
-  (! actor msg))
+(defn receive [on-message]
+  (Behaviors/receive
+   (reify akka.japi.function.Function2
+     (apply [_ ctx msg] (->behavior (on-message ctx msg))))))
 
-(defmacro spawn
-  [behavior n]
-  `(do (check-context)
-       (.spawn *context* ~behavior ~n)))
+(defn receive-message [on-message]
+  (Behaviors/receiveMessage
+   (reify akka.japi.Function
+     (apply [_ msg] (->behavior (on-message msg))))))
 
-(defmacro make-behavior
-  ([message-handler] `(ClojureBehavior/create ~message-handler))
-  ([message-handler sync-setup] `(ClojureBehavior/create ~message-handler ~sync-setup)))
-
-(defn actor-system [guardian-behavior name]
-  (ActorSystem/create guardian-behavior name))
-
-(defn ask
-  ([actor msg duration scheduler]
-   (future
-     (-> (AskPattern/ask
-          actor
-          (reify akka.japi.function.Function
-            (apply [_ reply]
-              (ClojureBehavior$Message. msg reply)))
-          duration
-          scheduler)
-         (.toCompletableFuture)
-         (.get)
-         (.content))))
-  ([actor msg duration]
-   (let [s (scheduler)]
-     (ask actor msg duration s))))

@@ -1,3 +1,3 @@
 # akka-clojure
 
-Checkout use cases [here](./test/org/lotuc/akka_clojure_test.clj)
+Checkout use cases [here](./src-dev/org/lotuc/examples).

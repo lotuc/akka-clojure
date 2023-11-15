@@ -1,15 +1,13 @@
 {:paths ["src" "resources"]
  :mvn/repos {"akka" {:url "https://repo.akka.io/maven"}}
  :deps {com.typesafe.akka/akka-actor-typed_2.13 {:mvn/version "2.9.0"}}
- :deps/prep-lib {:ensure "target/src-java/classes"
-                 :alias :build
-                 :fn compile-java}
  :aliases
  {:build {:deps {io.github.seancorfield/build-clj {:git/tag "v0.6.4" :git/sha "c21cfde"}}
           :ns-default build}
   :test {:extra-paths ["test"]
          :extra-deps {org.clojure/test.check {:mvn/version "1.1.1"}
                       io.github.cognitect-labs/test-runner {:git/tag "v0.5.0" :git/sha "48c3c67"}}}
-  :dev {:extra-paths ["src-dev" "target/src-java/classes"]
+  :dev {:extra-paths ["src-dev"]
         :extra-deps {org.clojure/tools.namespace {:mvn/version "1.4.4"}
-                     com.lambdaisland/classpath {:mvn/version "0.4.44"}}}}}
+                     com.lambdaisland/classpath {:mvn/version "0.4.44"}
+                     ch.qos.logback/logback-classic {:mvn/version "1.2.11"}}}}}

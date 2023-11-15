@@ -9,14 +9,6 @@
 (defn test "Run the tests." [opts]
   (bb/run-tests opts))
 
-(defn compile-java [{:keys [basis]}]
-  (let [class-dir "target/src-java/classes"]
-    (println "\nCompiling Java to" class-dir "...")
-    (->> {:src-dirs ["src-java"]
-          :class-dir class-dir
-          :basis (b/create-basis {:project "deps.edn"})}
-         b/javac)))
-
 (defn ci "Run the CI pipeline of tests (and build the JAR)." [opts]
   (-> opts
       (assoc :lib lib :version version)
