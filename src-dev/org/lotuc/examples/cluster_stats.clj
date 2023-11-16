@@ -20,31 +20,25 @@
 
 (def stats-service-key (ServiceKey/create Object "StatsService"))
 
-(defn- setup-with-timers [f]
-  (a/setup
-   (fn [ctx]
-     (a/with-timers
-       (fn [timers]
-         (f ctx timers))))))
+(defn- stats-worker* [{:keys [context timers]}]
+  (info context "Worker starting up")
+  (.startTimerWithFixedDelay timers :EvictCache :EvictCache (Duration/ofSeconds 30))
+  (let [!cache (atom {})]
+    (a/receive-message
+     (fn [{:keys [action] :as m}]
+       (cond
+         (= m :EvictCache)
+         (do (reset! !cache {}) :same)
+
+         (= action :Process)
+         (let [{:keys [word reply-to]} m]
+           (info context "Worker processing request [{}]" word)
+           (let [length (get (swap! !cache update word (fn [v] (or v (count word)))) word)]
+             (.tell reply-to {:action :Processed :word word :length length}))
+           :same))))))
 
 (defn stats-worker []
-  (setup-with-timers
-   (fn [ctx timers]
-     (info ctx "Worker starting up")
-     (.startTimerWithFixedDelay timers :EvictCache :EvictCache (Duration/ofSeconds 30))
-     (let [!cache (atom {})]
-       (a/receive-message
-        (fn [{:keys [action] :as m}]
-          (cond
-            (= m :EvictCache)
-            (do (reset! !cache {}) :same)
-
-            (= action :Process)
-            (let [{:keys [word reply-to]} m]
-              (info ctx "Worker processing request [{}]" word)
-              (let [length (get (swap! !cache update word (fn [v] (or v (count word)))) word)]
-                (.tell reply-to {:action :Processed :word word :length length}))
-              :same))))))))
+  (a/setup stats-worker* {:with-timer true}))
 
 (defn stats-aggregator [words workers reply-to]
   (a/setup
@@ -84,22 +78,25 @@
          (.spawnAnonymous ctx (stats-aggregator words workers reply-to))
          :same)))))
 
-(defn stats-service-client [service]
-  (setup-with-timers
-   (fn [ctx timers]
-     (.startTimerWithFixedDelay timers :Tick :Tick (Duration/ofSeconds 2))
-     (a/receive-message
-      (fn [{:keys [action] :as m}]
-        (cond
-          (= m :Tick)
-          (do (info ctx "Sending process request")
-              (.tell service {:action :ProcessText
-                              :text "this is the text that will be analyzed"
-                              :reply-to (.getSelf ctx)})
-              :same)
+(defn- stats-service-client*
+  [service {:keys [context timers]}]
+  (.startTimerWithFixedDelay timers :Tick :Tick (Duration/ofSeconds 2))
+  (a/receive-message
+   (fn [{:keys [action] :as m}]
+     (cond
+       (= m :Tick)
+       (do (info context "Sending process request")
+           (.tell service {:action :ProcessText
+                           :text "this is the text that will be analyzed"
+                           :reply-to (.getSelf context)})
+           :same)
 
-          (= action :JobResult)
-          (info ctx "Service result: {}" (:mean-word-length m))))))))
+       (= action :JobResult)
+       (info context "Service result: {}" (:mean-word-length m))))))
+
+(defn stats-service-client [service]
+  (-> (partial stats-service-client* service)
+      (a/setup {:with-timer true})))
 
 ;;; corresponds to original example's App.java
 (defn root-behavior []

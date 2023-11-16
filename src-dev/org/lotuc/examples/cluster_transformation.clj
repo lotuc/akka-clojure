@@ -20,63 +20,63 @@
 
 (def worker-secret-key (ServiceKey/create Object "Worker"))
 
+(defn frontend*
+  [!workers !job-counter {:keys [timers context] :as i}]
+  (.. context getSystem receptionist
+      (tell (Receptionist/subscribe worker-secret-key (.getSelf context))))
+  (.. timers
+      (startTimerWithFixedDelay :Tick :Tick (Duration/ofSeconds 2)))
+  (a/receive-message
+   (fn [{:keys [action] :as m}]
+     (cond
+       (= m :Tick)
+       (if-some [workers (let [ws @!workers] (when (seq ws) ws))]
+         (let [timeout (Duration/ofSeconds 5)
+               selected-worker (workers (mod @!job-counter (count workers)))
+               text (str "hello-" @!job-counter)]
+           (.ask context Object selected-worker timeout
+                 (reify akka.japi.function.Function
+                   (apply [_ reply-to]
+                     {:action :TransformText
+                      :text text
+                      :reply-to reply-to}))
+                 (reify akka.japi.function.Function2
+                   (apply [_ r _t]
+                     (if r
+                       {:action :TransformCompleted :original-text text :transformed-text (:text r)}
+                       {:action :JobFailed :why "Processing time out" :text text}))))
+           (swap! !job-counter inc)
+           :same)
+         (warn context "Got tick request but no workers available, not sending any work"))
+
+       (keyword? action)
+       (case action
+         :WorkersUpdated
+         (do (reset! !workers (into [] (:new-workers m)))
+             (info context "List of services registered with the receptionist changed: {}"
+                   (:new-workers m)))
+
+         :TransformCompleted
+         (info context "Got completed transform of {}: {}"
+               (:original-text m) (:transformed-text m))
+
+         :JobFailed
+         (warn context "Transformation of text {} failed. Because: {}"
+               (:text m) (:why m))
+
+         (warn context "Unkown action type: {} {}" action m))
+
+       (instance? Receptionist$Listing m)
+       (let [workers (into [] (.getServiceInstances m worker-secret-key))]
+         (reset! !workers workers)
+         (info context "List of services registered with the receptionist changed: {}"
+               workers)
+         :same)))))
+
 (defn frontend []
-  (let [!workers (atom [])
-        !job-counter (atom 0)]
-    (a/setup
-     (fn [ctx]
-       (a/with-timers
-         (fn [timers]
-           (.. ctx getSystem receptionist
-               (tell (Receptionist/subscribe worker-secret-key (.getSelf ctx))))
-           (.. timers
-               (startTimerWithFixedDelay :Tick :Tick (Duration/ofSeconds 2)))
-           (a/receive-message
-            (fn [{:keys [action] :as m}]
-              (cond
-                (= m :Tick)
-                (if-some [workers (let [ws @!workers] (when (seq ws) ws))]
-                  (let [timeout (Duration/ofSeconds 5)
-                        selected-worker (workers (mod @!job-counter (count workers)))
-                        text (str "hello-" @!job-counter)]
-                    (.ask ctx Object selected-worker timeout
-                          (reify akka.japi.function.Function
-                            (apply [_ reply-to]
-                              {:action :TransformText
-                               :text text
-                               :reply-to reply-to}))
-                          (reify akka.japi.function.Function2
-                            (apply [_ r _t]
-                              (if r
-                                {:action :TransformCompleted :original-text text :transformed-text (:text r)}
-                                {:action :JobFailed :why "Processing time out" :text text}))))
-                    (swap! !job-counter inc)
-                    :same)
-                  (warn ctx "Got tick request but no workers available, not sending any work"))
-
-                (keyword? action)
-                (case action
-                  :WorkersUpdated
-                  (do (reset! !workers (into [] (:new-workers m)))
-                      (info ctx "List of services registered with the receptionist changed: {}"
-                            (:new-workers m)))
-
-                  :TransformCompleted
-                  (info ctx "Got completed transform of {}: {}"
-                        (:original-text m) (:transformed-text m))
-
-                  :JobFailed
-                  (warn ctx "Transformation of text {} failed. Because: {}"
-                        (:text m) (:why m))
-
-                  (warn ctx "Unkown action type: {} {}" action m))
-
-                (instance? Receptionist$Listing m)
-                (let [workers (into [] (.getServiceInstances m worker-secret-key))]
-                  (reset! !workers workers)
-                  (info ctx "List of services registered with the receptionist changed: {}"
-                        workers)
-                  :same))))))))))
+  (let [!workers (atom []) !job-counter (atom 0)]
+    (-> (partial frontend* !workers !job-counter)
+        (a/setup {:with-timer true}))))
 
 (defn worker []
   (a/setup
