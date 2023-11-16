@@ -28,6 +28,11 @@
    (reify akka.japi.function.Function
      (apply [_ ctx] (->behavior (factory ctx) :nil-behavior (Behaviors/empty))))))
 
+(defn with-timers [factory]
+  (Behaviors/withTimers
+   (reify akka.japi.function.Function
+     (apply [_ timers] (->behavior (factory timers) :nil-behavior (Behaviors/empty))))))
+
 (defn receive [on-message]
   (Behaviors/receive
    (reify akka.japi.function.Function2
@@ -37,4 +42,3 @@
   (Behaviors/receiveMessage
    (reify akka.japi.Function
      (apply [_ msg] (->behavior (on-message msg))))))
-
