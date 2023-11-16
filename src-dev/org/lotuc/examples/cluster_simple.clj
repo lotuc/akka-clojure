@@ -1,6 +1,6 @@
 (ns org.lotuc.examples.cluster-simple
   (:require
-   [org.lotuc.akka-clojure :as a])
+   [org.lotuc.akka.behaviors :as behaviors])
   (:import
    (com.typesafe.config ConfigFactory)
    (akka.actor.typed ActorSystem)
@@ -15,18 +15,18 @@
   `(.info (.getLog ~ctx) ~msg (into-array Object [~@args])))
 
 (defn cluster-listener []
-  (a/setup
+  (behaviors/setup
    (fn [ctx]
      (let [self (.getSelf ctx)
            cluster (Cluster/get (.getSystem ctx))]
        (doto (.subscriptions cluster)
          (.tell (Subscribe/create self ClusterEvent$MemberEvent))
          (.tell (Subscribe/create self ClusterEvent$ReachabilityEvent)))
-       (a/receive-message
+       (behaviors/receive-message
         (fn [m] (info ctx "recv: {} - {}" (class m) (bean m))))))))
 
 (def root-behavior
-  (a/setup
+  (behaviors/setup
    (fn [ctx]
      (.spawn ctx (cluster-listener) "ClusterListener")
      :empty)))

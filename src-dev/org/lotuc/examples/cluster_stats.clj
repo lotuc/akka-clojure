@@ -1,6 +1,6 @@
 (ns org.lotuc.examples.cluster-stats
   (:require
-   [org.lotuc.akka-clojure :as a]
+   [org.lotuc.akka.behaviors :as behaviors]
    [clojure.string :as s])
   (:import
    (akka.cluster.typed ClusterSingletonSettings ClusterSingleton)
@@ -24,7 +24,7 @@
   (info context "Worker starting up")
   (.startTimerWithFixedDelay timers :EvictCache :EvictCache (Duration/ofSeconds 30))
   (let [!cache (atom {})]
-    (a/receive-message
+    (behaviors/receive-message
      (fn [{:keys [action] :as m}]
        (cond
          (= m :EvictCache)
@@ -38,10 +38,10 @@
            :same))))))
 
 (defn stats-worker []
-  (a/setup stats-worker* {:with-timer true}))
+  (behaviors/setup stats-worker* {:with-timer true}))
 
 (defn stats-aggregator [words workers reply-to]
-  (a/setup
+  (behaviors/setup
    (fn [ctx]
      (let [expected-responses (count words)
            !results (atom [])]
@@ -49,7 +49,7 @@
        (doseq [word words]
          (.tell workers {:action :Process :word word :reply-to (.getSelf ctx)}))
 
-       (a/receive-message
+       (behaviors/receive-message
         (fn [{:keys [action] :as m}]
           (cond
             (= m :Timeout)
@@ -66,7 +66,7 @@
                 :same)))))))))
 
 (defn stats-service [workers]
-  (a/receive
+  (behaviors/receive
    (fn [ctx {:keys [action] :as m}]
      (cond
        (= m :Stop)
@@ -81,7 +81,7 @@
 (defn- stats-service-client*
   [service {:keys [context timers]}]
   (.startTimerWithFixedDelay timers :Tick :Tick (Duration/ofSeconds 2))
-  (a/receive-message
+  (behaviors/receive-message
    (fn [{:keys [action] :as m}]
      (cond
        (= m :Tick)
@@ -96,11 +96,11 @@
 
 (defn stats-service-client [service]
   (-> (partial stats-service-client* service)
-      (a/setup {:with-timer true})))
+      (behaviors/setup {:with-timer true})))
 
 ;;; corresponds to original example's App.java
 (defn root-behavior []
-  (a/setup
+  (behaviors/setup
    (fn [ctx]
      (let [cluster (Cluster/get (.getSystem ctx))
            self-member (.selfMember cluster)]
@@ -131,12 +131,12 @@
 
 ;;; corresponds to original example's AppOneMaster.java
 (defn root-behavior-one-master []
-  (a/setup
+  (behaviors/setup
    (fn [ctx]
      (let [cluster (Cluster/get (.getSystem ctx))
            singleton-settings (-> (ClusterSingletonSettings/create (.getSystem ctx))
                                   (.withRole "compute"))
-           service-behavior (a/setup
+           service-behavior (behaviors/setup
                              (fn [singleton-ctx]
                                (let [worker-group-behavior
                                      (-> (Routers/group worker-service-key)

@@ -1,6 +1,6 @@
 (ns org.lotuc.examples.fsm
   (:require
-   [org.lotuc.akka-clojure :as a])
+   [org.lotuc.akka.behaviors :as behaviors])
   (:import
    (akka.actor.typed ActorSystem)
    (akka.actor.typed.javadsl Behaviors)
@@ -12,16 +12,16 @@
   `(.info (.getLog ~ctx) ~msg (into-array [~@args])))
 
 (def chopstck-behavior
-  (a/setup
+  (behaviors/setup
    (fn [ctx]
      (letfn [(available []
-               (a/receive-message
+               (behaviors/receive-message
                 (fn [{:keys [action hakker]}]
                   (when (= action :Take)
                     (.tell hakker {:chopstick (.getSelf ctx) :taken? true})
                     (taken-by hakker)))))
              (taken-by [hakker-holder]
-               (a/receive-message
+               (behaviors/receive-message
                 (fn [{:keys [action hakker]}]
                   (cond
                     (= action :Take)
@@ -32,17 +32,17 @@
        (available)))))
 
 (defn hakker-behavior [name left right]
-  (a/setup
+  (behaviors/setup
    (fn [ctx]
      (letfn [(thinking []
-               (a/receive-message
+               (behaviors/receive-message
                 (fn [{:keys [action]}]
                   (when (= action :Eat)
                     (.tell left {:action :Take :hakker (.getSelf ctx)})
                     (.tell right {:action :Take :hakker (.getSelf ctx)})
                     (hungry)))))
              (hungry []
-               (a/receive-message
+               (behaviors/receive-message
                 (fn [{:keys [chopstick taken?]}]
                   (if taken?
                     (cond
@@ -50,7 +50,7 @@
                       (= chopstick right) (wait-for-other-chopstick left right))
                     (first-chopstick-denied)))))
              (wait-for-other-chopstick [chopstick-to-wait-for taken-chopstick]
-               (a/receive-message
+               (behaviors/receive-message
                 (fn [{:keys [chopstick taken?]}]
                   (when (= chopstick chopstick-to-wait-for)
                     (if taken?
@@ -60,7 +60,7 @@
                       (do (.tell taken-chopstick {:action :Put :hakker (.getSelf ctx)})
                           (start-thinking (Duration/ofMillis 10))))))))
              (eating []
-               (a/receive-message
+               (behaviors/receive-message
                 (fn [{:keys [action]}]
                   (when (= action :Think)
                     (info ctx "{} puts down his chopsticks and starts to think" name)
@@ -68,7 +68,7 @@
                     (.tell right {:action :Put :hakker (.getSelf ctx)})
                     (start-thinking (Duration/ofSeconds 5))))))
              (first-chopstick-denied []
-               (a/receive-message
+               (behaviors/receive-message
                 (fn [{:keys [chopstick taken?]}]
                   (if taken?
                     (do (.tell chopstick {:action :Put :hakker (.getSelf ctx)})
@@ -88,7 +88,7 @@
               (start-thinking (Duration/ofSeconds 3))))))))))
 
 (def dining-behavior
-  (a/setup
+  (behaviors/setup
    (fn [ctx]
      (let [hakker-names ["Ghosh" "Boner" "Klang" "Krasser" "Manie"]
            chopsticks (->> hakker-names

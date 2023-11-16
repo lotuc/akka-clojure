@@ -1,6 +1,6 @@
 (ns org.lotuc.examples.quickstart
   (:require
-   [org.lotuc.akka-clojure :as a])
+   [org.lotuc.akka.behaviors :as behaviors])
   (:import
    (akka.actor.typed ActorSystem)))
 
@@ -10,7 +10,7 @@
   `(.info (.getLog ~ctx) ~msg (into-array Object [~@args])))
 
 (defn greeter-behavior []
-  (a/receive
+  (behaviors/receive
    (fn [ctx {:keys [whom reply-to]}]
      (when whom
        (info ctx "Hello {}!" whom)
@@ -18,7 +18,7 @@
 
 (defn greeter-bot-behavior [max]
   (let [greeter-counter (atom 0)]
-    (a/receive
+    (behaviors/receive
      (fn [ctx {:keys [whom reply-to]}]
        (when whom
          (swap! greeter-counter inc)
@@ -28,10 +28,10 @@
            (.tell reply-to {:whom whom :reply-to (.getSelf ctx)})))))))
 
 (defn greeter-main []
-  (a/setup
+  (behaviors/setup
    (fn [ctx]
      (let [greeter (.spawn ctx (greeter-behavior) "greeter")]
-       (a/receive-message
+       (behaviors/receive-message
         (fn [{:keys [whom] :as m}]
           (when whom
             (let [bot (.spawn ctx (greeter-bot-behavior 3) whom)]

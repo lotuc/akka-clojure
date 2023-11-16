@@ -1,6 +1,6 @@
 (ns org.lotuc.examples.cluster-transformation
   (:require
-   [org.lotuc.akka-clojure :as a]
+   [org.lotuc.akka.behaviors :as behaviors]
    [clojure.string :as s])
   (:import
    (com.typesafe.config ConfigFactory)
@@ -26,7 +26,7 @@
       (tell (Receptionist/subscribe worker-secret-key (.getSelf context))))
   (.. timers
       (startTimerWithFixedDelay :Tick :Tick (Duration/ofSeconds 2)))
-  (a/receive-message
+  (behaviors/receive-message
    (fn [{:keys [action] :as m}]
      (cond
        (= m :Tick)
@@ -76,26 +76,26 @@
 (defn frontend []
   (let [!workers (atom []) !job-counter (atom 0)]
     (-> (partial frontend* !workers !job-counter)
-        (a/setup {:with-timer true}))))
+        (behaviors/setup {:with-timer true}))))
 
 (defn worker []
-  (a/setup
+  (behaviors/setup
    (fn [ctx]
      (info ctx "Registering myself with receptionist")
      (.. ctx getSystem receptionist
          (tell (Receptionist/register worker-secret-key (.narrow (.getSelf ctx)))))
-     (a/receive-message
+     (behaviors/receive-message
       (fn [{:keys [action text reply-to] :as m}]
         (.tell reply-to {:action :TextTransformed :text (s/upper-case text)}))))))
 
 (defn worker-test []
-  (a/setup
+  (behaviors/setup
    (fn [ctx]
      (let [w (.spawn ctx (worker) "worker0")]
        (let [reply-to (.getSelf ctx)]
          (.tell w {:action :TransformText :text "hello world"
                    :reply-to reply-to}))
-       (a/receive-message
+       (behaviors/receive-message
         (fn [m] (println "recv:" m)))))))
 
 (comment
@@ -107,7 +107,7 @@
   (.terminate s))
 
 (defn root-behavior []
-  (a/setup
+  (behaviors/setup
    (fn [ctx]
      (let [cluster (Cluster/get (.getSystem ctx))
            self-member (.selfMember cluster)]
