@@ -1,0 +1,24 @@
+(ns org.lotuc.akka-clojure)
+
+(defmacro setup
+  "setup wrapper.
+
+  ```Clojure
+  (setup a-behavior [a0 a1]
+    ...actor context available...
+    returns a guardian behavior)
+
+  ;; additional setup
+  (setup a-behavior [a0 a1] {:with-timer true :with-stash {:capacity 2}}
+    ...actor context & timers & stash buffer available...
+    returns a guardian behavior)
+
+  (a-behavior) ; -> guardian behavior
+  ```"
+  [n args & [opts-or-body & more-body]]
+  (if (map? opts-or-body)
+    `(defn ~n ~args
+       ~opts-or-body
+       (fn [_#] ~@more-body))
+    `(defn ~n ~args
+       (fn [_#] ~opts-or-body ~@more-body))))

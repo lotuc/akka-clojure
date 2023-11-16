@@ -1,0 +1,1 @@
+{:cljfmt {:indents {org.lotuc.akka-clojure/setup [[:inner 0] [:inner 1]]}}}
