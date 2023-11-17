@@ -1,10 +1,10 @@
 (ns org.lotuc.examples.cluster-simple
   (:require
    [org.lotuc.akka.behaviors :as behaviors]
+   [org.lotuc.akka.cluster :as cluster]
    [org.lotuc.akka.system :refer [create-system-from-config]])
   (:import
-   (akka.cluster ClusterEvent$MemberEvent ClusterEvent$ReachabilityEvent)
-   (akka.cluster.typed Cluster Subscribe)))
+   (akka.cluster ClusterEvent$MemberEvent ClusterEvent$ReachabilityEvent)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; simple
@@ -16,10 +16,10 @@
   (behaviors/setup
    (fn [ctx]
      (let [self (.getSelf ctx)
-           cluster (Cluster/get (.getSystem ctx))]
+           cluster (cluster/get-cluster (.getSystem ctx))]
        (doto (.subscriptions cluster)
-         (.tell (Subscribe/create self ClusterEvent$MemberEvent))
-         (.tell (Subscribe/create self ClusterEvent$ReachabilityEvent)))
+         (.tell (cluster/create-subscribe self ClusterEvent$MemberEvent))
+         (.tell (cluster/create-subscribe self ClusterEvent$ReachabilityEvent)))
        (behaviors/receive-message
         (fn [m] (info ctx "recv: {} - {}" (class m) (bean m))))))))
 

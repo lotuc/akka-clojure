@@ -2,10 +2,10 @@
   (:require
    [clojure.string :as s]
    [org.lotuc.akka.behaviors :as behaviors]
+   [org.lotuc.akka.cluster :as cluster]
    [org.lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.actor.typed.receptionist Receptionist Receptionist$Listing ServiceKey)
-   (akka.cluster.typed Cluster)
    (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
@@ -108,7 +108,7 @@
 (defn root-behavior []
   (behaviors/setup
    (fn [ctx]
-     (let [cluster (Cluster/get (.getSystem ctx))
+     (let [cluster (cluster/get-cluster (.getSystem ctx))
            self-member (.selfMember cluster)]
        (info ctx "starting: backend={} frontend={}"
              (.hasRole self-member "backend")

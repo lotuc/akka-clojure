@@ -2,13 +2,11 @@
   (:require
    [clojure.string :as s]
    [org.lotuc.akka.behaviors :as behaviors]
+   [org.lotuc.akka.cluster :as cluster]
    [org.lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.actor.typed.javadsl Routers)
    (akka.actor.typed.receptionist Receptionist ServiceKey)
-   (akka.cluster.typed ClusterSingleton ClusterSingletonSettings)
-   (akka.cluster.typed SingletonActor)
-   (akka.cluster.typed Cluster)
    (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
@@ -101,7 +99,7 @@
 (defn root-behavior []
   (behaviors/setup
    (fn [ctx]
-     (let [cluster (Cluster/get (.getSystem ctx))
+     (let [cluster (cluster/get-cluster (.getSystem ctx))
            self-member (.selfMember cluster)]
        (cond
          (.hasRole self-member "compute")
@@ -132,9 +130,8 @@
 (defn root-behavior-one-master []
   (behaviors/setup
    (fn [ctx]
-     (let [cluster (Cluster/get (.getSystem ctx))
-           singleton-settings (-> (ClusterSingletonSettings/create (.getSystem ctx))
-                                  (.withRole "compute"))
+     (let [system (.getSystem ctx)
+           cluster (cluster/get-cluster system)
            service-behavior (behaviors/setup
                              (fn [singleton-ctx]
                                (let [worker-group-behavior
@@ -147,10 +144,12 @@
                                      (.spawn singleton-ctx worker-group-behavior
                                              "WorkersRouter")]
                                  (stats-service workers-router))))
-           service-singleton (-> (SingletonActor/of service-behavior "StatsService")
-                                 (.withStopMessage :Stop)
-                                 (.withSettings singleton-settings))
-           service-proxy (-> (ClusterSingleton/get (.getSystem ctx))
+           service-singleton (->> {:stop-message :Stop
+                                   :settings (cluster/create-cluster-singleton-setting
+                                              system {:role "compute"})}
+                                  (cluster/singleton-actor-of
+                                   service-behavior "StatsService"))
+           service-proxy (-> (cluster/get-cluster-singleton (.getSystem ctx))
                              (.init service-singleton))
            self-member (.selfMember cluster)]
        (cond
