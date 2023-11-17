@@ -2,11 +2,12 @@
   (:require
    [clojure.string :as s]
    [org.lotuc.akka-clojure :as a]
-   [org.lotuc.akka.system :refer [create-system-from-config]]
-   [org.lotuc.akka.cluster :as cluster])
+   [org.lotuc.akka.cluster :as cluster]
+   [org.lotuc.akka.receptionist :as receptionist]
+   [org.lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.actor.typed.javadsl Routers)
-   (akka.actor.typed.receptionist Receptionist ServiceKey)
+   (akka.actor.typed.receptionist ServiceKey)
    (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
@@ -106,7 +107,7 @@
             workers (a/spawn worker-pool-behavior "WorkerRouter")
             service (a/spawn (stats-service workers) "StatsService")]
         (.. system receptionist
-            (a/tell (Receptionist/register stats-service-key service)))
+            (a/tell (receptionist/register stats-service-key service)))
         :empty)
 
       (.hasRole self-member "client")
@@ -148,7 +149,7 @@
         (doseq [i (range 4)]
           (let [worker (a/spawn (stats-worker) (str "StatsWorker" i))]
             (.. system receptionist
-                (a/tell (Receptionist/register worker-service-key (.narrow worker))))))
+                (a/tell (receptionist/register worker-service-key (.narrow worker))))))
         :empty)
 
       (.hasRole self-member "client")

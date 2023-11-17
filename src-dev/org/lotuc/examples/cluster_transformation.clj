@@ -3,9 +3,10 @@
    [clojure.string :as s]
    [org.lotuc.akka.behaviors :as behaviors]
    [org.lotuc.akka.cluster :as cluster]
+   [org.lotuc.akka.receptionist :as receptionist]
    [org.lotuc.akka.system :refer [create-system-from-config]])
   (:import
-   (akka.actor.typed.receptionist Receptionist Receptionist$Listing ServiceKey)
+   (akka.actor.typed.receptionist Receptionist$Listing)
    (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
@@ -17,12 +18,12 @@
 (defmacro warn [ctx msg & args]
   `(.warn (.getLog ~ctx) ~msg (into-array Object [~@args])))
 
-(def worker-secret-key (ServiceKey/create Object "Worker"))
+(def worker-secret-key (receptionist/create-service-key "Worker"))
 
 (defn frontend*
   [!workers !job-counter {:keys [timers context] :as i}]
   (.. context getSystem receptionist
-      (tell (Receptionist/subscribe worker-secret-key (.getSelf context))))
+      (tell (receptionist/subscribe worker-secret-key (.getSelf context))))
   (.. timers
       (startTimerWithFixedDelay :Tick :Tick (Duration/ofSeconds 2)))
   (behaviors/receive-message
@@ -82,7 +83,7 @@
    (fn [ctx]
      (info ctx "Registering myself with receptionist")
      (.. ctx getSystem receptionist
-         (tell (Receptionist/register worker-secret-key (.narrow (.getSelf ctx)))))
+         (tell (receptionist/register worker-secret-key (.narrow (.getSelf ctx)))))
      (behaviors/receive-message
       (fn [{:keys [action text reply-to] :as m}]
         (.tell reply-to {:action :TextTransformed :text (s/upper-case text)}))))))

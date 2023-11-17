@@ -2,20 +2,21 @@
   (:require
    [clojure.string :as s]
    [org.lotuc.akka-clojure :as a]
+   [org.lotuc.akka.receptionist :as receptionist]
    [org.lotuc.akka.system :refer [create-system-from-config]])
   (:import
-   (akka.actor.typed.receptionist Receptionist Receptionist$Listing ServiceKey)
+   (akka.actor.typed.receptionist Receptionist$Listing)
    (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; transformation
 
-(def worker-secret-key (ServiceKey/create Object "Worker"))
+(def worker-secret-key (receptionist/create-service-key "Worker"))
 
 (a/setup frontend [] {:with-timer true}
   (let [!workers (atom []) !job-counter (atom 0)]
     (.. (a/system) receptionist
-        (a/tell (Receptionist/subscribe worker-secret-key (a/self))))
+        (a/tell (receptionist/subscribe worker-secret-key (a/self))))
     (a/start-timer :Tick {:timer-key :Tick
                           :timer-type :fix-delay
                           :delay (Duration/ofSeconds 2)})
@@ -60,7 +61,7 @@
 (a/setup worker []
   (a/info "Registering myself with receptionist")
   (.. (a/system) receptionist
-    (a/tell (Receptionist/register worker-secret-key (a/self))))
+    (a/tell (receptionist/register worker-secret-key (a/self))))
   (a/receive-message
     (fn [{:keys [action text reply-to] :as m}]
       (a/tell reply-to {:action :TextTransformed :text (s/upper-case text)}))))

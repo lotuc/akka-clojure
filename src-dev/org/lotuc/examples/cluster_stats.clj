@@ -3,10 +3,10 @@
    [clojure.string :as s]
    [org.lotuc.akka.behaviors :as behaviors]
    [org.lotuc.akka.cluster :as cluster]
+   [org.lotuc.akka.receptionist :as receptionist]
    [org.lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.actor.typed.javadsl Routers)
-   (akka.actor.typed.receptionist Receptionist ServiceKey)
    (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
@@ -15,7 +15,7 @@
 (defmacro info [ctx msg & args]
   `(.info (.getLog ~ctx) ~msg (into-array Object [~@args])))
 
-(def stats-service-key (ServiceKey/create Object "StatsService"))
+(def stats-service-key (receptionist/create-service-key "StatsService"))
 
 (defn- stats-worker* [{:keys [context timers]}]
   (info context "Worker starting up")
@@ -116,7 +116,7 @@
                workers (.spawn ctx worker-pool-behavior "WorkerRouter")
                service (.spawn ctx (stats-service (.narrow workers)) "StatsService")]
            (.. ctx getSystem receptionist
-               (tell (Receptionist/register stats-service-key (.narrow service))))
+               (tell (receptionist/register stats-service-key (.narrow service))))
            :empty)
 
          (.hasRole self-member "client")
@@ -124,7 +124,7 @@
            (.spawn ctx (stats-service-client service-router) "Client")
            :empty))))))
 
-(def worker-service-key (ServiceKey/create Object "Worker"))
+(def worker-service-key (receptionist/create-service-key Object "Worker"))
 
 ;;; corresponds to original example's AppOneMaster.java
 (defn root-behavior-one-master []
@@ -161,7 +161,7 @@
            (doseq [i (range 4)]
              (let [worker (.spawn ctx (stats-worker) (str "StatsWorker" i))]
                (.. ctx getSystem receptionist
-                   (tell (Receptionist/register worker-service-key (.narrow worker))))))
+                   (tell (receptionist/register worker-service-key (.narrow worker))))))
            :empty)
 
          (.hasRole self-member "client")
