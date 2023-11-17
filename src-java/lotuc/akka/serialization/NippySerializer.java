@@ -1,4 +1,4 @@
-package org.lotuc.akka.serialization;
+package lotuc.akka.serialization;
 
 import akka.actor.ExtendedActorSystem;
 import akka.actor.typed.ActorSystem;
@@ -32,17 +32,17 @@ public class NippySerializer extends JSerializer {
     ActorSystem actorSystem = Adapter.toTyped(extendedActorSystem);
     ActorRefResolver actorRefResolver = ActorRefResolver.get(actorSystem);
 
-    require.invoke(RT.readString("org.lotuc.akka.serialization.nippy"));
+    require.invoke(RT.readString("lotuc.akka.serialization.nippy"));
     Var varExtendedActorSystem;
     Var varActorSystem;
     Var varActorRefResolver;
 
     varExtendedActorSystem =
-      RT.var("org.lotuc.akka.serialization.nippy", "*extended-actor-system*");
+      RT.var("lotuc.akka.serialization.nippy", "*extended-actor-system*");
     varActorSystem =
-      RT.var("org.lotuc.akka.serialization.nippy", "*actor-system*");
+      RT.var("lotuc.akka.serialization.nippy", "*actor-system*");
     varActorRefResolver =
-      RT.var("org.lotuc.akka.serialization.nippy", "*actor-ref-resolver*");
+      RT.var("lotuc.akka.serialization.nippy", "*actor-ref-resolver*");
 
     this.bindings = PersistentHashMap.EMPTY
       .assoc(varActorSystem, actorSystem)

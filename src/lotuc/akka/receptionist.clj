@@ -1,4 +1,4 @@
-(ns org.lotuc.akka.receptionist
+(ns lotuc.akka.receptionist
   (:import
    (akka.actor.typed.receptionist Receptionist ServiceKey)))
 

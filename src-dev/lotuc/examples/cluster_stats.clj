@@ -1,10 +1,10 @@
-(ns org.lotuc.examples.cluster-stats
+(ns lotuc.examples.cluster-stats
   (:require
    [clojure.string :as s]
-   [org.lotuc.akka.behaviors :as behaviors]
-   [org.lotuc.akka.cluster :as cluster]
-   [org.lotuc.akka.receptionist :as receptionist]
-   [org.lotuc.akka.system :refer [create-system-from-config]])
+   [lotuc.akka.behaviors :as behaviors]
+   [lotuc.akka.cluster :as cluster]
+   [lotuc.akka.receptionist :as receptionist]
+   [lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.actor.typed.javadsl Routers)
    (java.time Duration)))

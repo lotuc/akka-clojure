@@ -1,2 +1,2 @@
-{:hooks {:macroexpand {org.lotuc.akka-clojure/setup org.lotuc.akka-clojure/setup}}
- :lint-as {org.lotuc.akka-clojure/setup clojure.core/defn}}
+{:hooks {:macroexpand {lotuc.akka-clojure/setup lotuc.akka-clojure/setup}}
+ :lint-as {lotuc.akka-clojure/setup clojure.core/defn}}

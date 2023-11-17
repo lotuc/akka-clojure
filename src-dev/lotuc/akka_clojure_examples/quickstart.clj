@@ -1,7 +1,7 @@
-(ns org.lotuc.akka-clojure-examples.quickstart
+(ns lotuc.akka-clojure-examples.quickstart
   (:require
-   [org.lotuc.akka-clojure :as a]
-   [org.lotuc.akka.system :refer [create-system]]))
+   [lotuc.akka-clojure :as a]
+   [lotuc.akka.system :refer [create-system]]))
 
 ;;; https://developer.lightbend.com/guides/akka-quickstart-java/
 

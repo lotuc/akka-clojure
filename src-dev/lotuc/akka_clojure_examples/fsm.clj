@@ -1,7 +1,7 @@
-(ns org.lotuc.akka-clojure-examples.fsm
+(ns lotuc.akka-clojure-examples.fsm
   (:require
-   [org.lotuc.akka-clojure :as a]
-   [org.lotuc.akka.system :refer [create-system]])
+   [lotuc.akka-clojure :as a]
+   [lotuc.akka.system :refer [create-system]])
   (:import
    (java.time Duration)))
 

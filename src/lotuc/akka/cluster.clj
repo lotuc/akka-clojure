@@ -1,4 +1,4 @@
-(ns org.lotuc.akka.cluster
+(ns lotuc.akka.cluster
   (:import
    (akka.cluster.typed Cluster Subscribe
                        ClusterSingleton

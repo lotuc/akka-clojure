@@ -1,4 +1,4 @@
-(ns org.lotuc.akka.behaviors
+(ns lotuc.akka.behaviors
   (:require
    [clojure.string :as s])
   (:import

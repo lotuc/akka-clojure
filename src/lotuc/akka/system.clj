@@ -1,4 +1,4 @@
-(ns org.lotuc.akka.system
+(ns lotuc.akka.system
   (:import
    (akka.actor.typed ActorSystem)
    (com.typesafe.config ConfigFactory)))

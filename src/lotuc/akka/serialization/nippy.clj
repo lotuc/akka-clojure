@@ -1,4 +1,4 @@
-(ns org.lotuc.akka.serialization.nippy
+(ns lotuc.akka.serialization.nippy
   (:require
    [taoensso.nippy :as nippy])
   (:import

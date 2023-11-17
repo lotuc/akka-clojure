@@ -1,9 +1,9 @@
-(ns org.lotuc.akka-clojure
+(ns lotuc.akka-clojure
   (:require
-   [org.lotuc.akka.behaviors :as behaviors]
-   [org.lotuc.akka.cluster :as cluster]
-   [org.lotuc.akka.java-dsl :as dsl]
-   [org.lotuc.akka.receptionist :as receptionist]))
+   [lotuc.akka.behaviors :as behaviors]
+   [lotuc.akka.cluster :as cluster]
+   [lotuc.akka.java-dsl :as dsl]
+   [lotuc.akka.receptionist :as receptionist]))
 
 ;;; Dyanmic bindings for message & signal handlers
 (def ^:dynamic *local-context* nil)

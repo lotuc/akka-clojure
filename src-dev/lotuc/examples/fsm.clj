@@ -1,7 +1,7 @@
-(ns org.lotuc.examples.fsm
+(ns lotuc.examples.fsm
   (:require
-   [org.lotuc.akka.behaviors :as behaviors]
-   [org.lotuc.akka.system :refer [create-system]])
+   [lotuc.akka.behaviors :as behaviors]
+   [lotuc.akka.system :refer [create-system]])
   (:import
    (java.time Duration)))
 

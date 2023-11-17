@@ -1,8 +1,8 @@
-(ns org.lotuc.examples.cluster-simple
+(ns lotuc.examples.cluster-simple
   (:require
-   [org.lotuc.akka.behaviors :as behaviors]
-   [org.lotuc.akka.cluster :as cluster]
-   [org.lotuc.akka.system :refer [create-system-from-config]])
+   [lotuc.akka.behaviors :as behaviors]
+   [lotuc.akka.cluster :as cluster]
+   [lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.cluster ClusterEvent$MemberEvent ClusterEvent$ReachabilityEvent)))
 

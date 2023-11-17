@@ -1,7 +1,7 @@
-(ns org.lotuc.examples.quickstart
+(ns lotuc.examples.quickstart
   (:require
-   [org.lotuc.akka.behaviors :as behaviors]
-   [org.lotuc.akka.system :refer [create-system]]))
+   [lotuc.akka.behaviors :as behaviors]
+   [lotuc.akka.system :refer [create-system]]))
 
 ;;; https://developer.lightbend.com/guides/akka-quickstart-java/
 

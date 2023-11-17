@@ -1,8 +1,8 @@
-(ns org.lotuc.akka-clojure-examples.cluster-simple
+(ns lotuc.akka-clojure-examples.cluster-simple
   (:require
-   [org.lotuc.akka-clojure :as a]
-   [org.lotuc.akka.system :refer [create-system-from-config]]
-   [org.lotuc.akka.cluster :as cluster])
+   [lotuc.akka-clojure :as a]
+   [lotuc.akka.system :refer [create-system-from-config]]
+   [lotuc.akka.cluster :as cluster])
   (:import
    (akka.cluster ClusterEvent$MemberEvent ClusterEvent$ReachabilityEvent)))
 

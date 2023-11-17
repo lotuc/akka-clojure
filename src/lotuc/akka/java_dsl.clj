@@ -1,4 +1,4 @@
-(ns org.lotuc.akka.java-dsl)
+(ns lotuc.akka.java-dsl)
 
 (defprotocol TimerScheduler
   (cancel-timer [_ timer-key])

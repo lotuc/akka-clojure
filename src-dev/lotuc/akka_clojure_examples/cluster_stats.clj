@@ -1,10 +1,10 @@
-(ns org.lotuc.akka-clojure-examples.cluster-stats
+(ns lotuc.akka-clojure-examples.cluster-stats
   (:require
    [clojure.string :as s]
-   [org.lotuc.akka-clojure :as a]
-   [org.lotuc.akka.cluster :as cluster]
-   [org.lotuc.akka.receptionist :as receptionist]
-   [org.lotuc.akka.system :refer [create-system-from-config]])
+   [lotuc.akka-clojure :as a]
+   [lotuc.akka.cluster :as cluster]
+   [lotuc.akka.receptionist :as receptionist]
+   [lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.actor.typed.javadsl Routers)
    (akka.actor.typed.receptionist ServiceKey)

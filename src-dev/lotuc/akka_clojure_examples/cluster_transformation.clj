@@ -1,9 +1,9 @@
-(ns org.lotuc.akka-clojure-examples.cluster-transformation
+(ns lotuc.akka-clojure-examples.cluster-transformation
   (:require
    [clojure.string :as s]
-   [org.lotuc.akka-clojure :as a]
-   [org.lotuc.akka.receptionist :as receptionist]
-   [org.lotuc.akka.system :refer [create-system-from-config]])
+   [lotuc.akka-clojure :as a]
+   [lotuc.akka.receptionist :as receptionist]
+   [lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.actor.typed.receptionist Receptionist$Listing)
    (java.time Duration)))
