@@ -1,4 +1,4 @@
-(ns lotuc.akka-clojure-examples.cluster-transformation
+(ns lotuc.examples.akka-clojure.cluster-transformation
   (:require
    [clojure.string :as s]
    [lotuc.akka-clojure :as a]
@@ -11,11 +11,11 @@
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; transformation
 
-(def worker-secret-key (receptionist/create-service-key "Worker"))
+(def worker-service-key (receptionist/create-service-key "Worker"))
 
 (a/setup frontend [] {:with-timer true}
   (let [!workers (atom []) !job-counter (atom 0)]
-    (a/subscribe-to-receptionist worker-secret-key)
+    (a/subscribe-to-receptionist worker-service-key)
     (a/start-timer :Tick {:timer-key :Tick
                           :timer-type :fix-delay
                           :delay (Duration/ofSeconds 2)})
@@ -52,14 +52,14 @@
            (a/warn "Unkown action type: {} {}" action m))
 
          (instance? Receptionist$Listing m)
-         (let [workers (into [] (.getServiceInstances m worker-secret-key))]
+         (let [workers (into [] (.getServiceInstances m worker-service-key))]
            (reset! !workers workers)
            (a/info "List of services registered with the receptionist changed: {}" workers)
            :same))))))
 
 (a/setup worker []
   (a/info "Registering myself with receptionist")
-  (a/register-with-receptionist worker-secret-key)
+  (a/register-with-receptionist worker-service-key)
   (a/receive-message
     (fn [{:keys [action text reply-to] :as m}]
       (a/tell reply-to {:action :TextTransformed :text (s/upper-case text)}))))

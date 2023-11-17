@@ -1,4 +1,4 @@
-(ns lotuc.examples.cluster-transformation
+(ns lotuc.examples.akka.cluster-transformation
   (:require
    [clojure.string :as s]
    [lotuc.akka.behaviors :as behaviors]
@@ -18,12 +18,12 @@
 (defmacro warn [ctx msg & args]
   `(.warn (.getLog ~ctx) ~msg (into-array Object [~@args])))
 
-(def worker-secret-key (receptionist/create-service-key "Worker"))
+(def worker-service-key (receptionist/create-service-key "Worker"))
 
 (defn frontend*
   [!workers !job-counter {:keys [timers context] :as i}]
   (.. context getSystem receptionist
-      (tell (receptionist/subscribe worker-secret-key (.getSelf context))))
+      (tell (receptionist/subscribe worker-service-key (.getSelf context))))
   (.. timers
       (startTimerWithFixedDelay :Tick :Tick (Duration/ofSeconds 2)))
   (behaviors/receive-message
@@ -67,7 +67,7 @@
          (warn context "Unkown action type: {} {}" action m))
 
        (instance? Receptionist$Listing m)
-       (let [workers (into [] (.getServiceInstances m worker-secret-key))]
+       (let [workers (into [] (.getServiceInstances m worker-service-key))]
          (reset! !workers workers)
          (info context "List of services registered with the receptionist changed: {}"
                workers)
@@ -83,7 +83,7 @@
    (fn [ctx]
      (info ctx "Registering myself with receptionist")
      (.. ctx getSystem receptionist
-         (tell (receptionist/register worker-secret-key (.narrow (.getSelf ctx)))))
+         (tell (receptionist/register worker-service-key (.narrow (.getSelf ctx)))))
      (behaviors/receive-message
       (fn [{:keys [action text reply-to] :as m}]
         (.tell reply-to {:action :TextTransformed :text (s/upper-case text)}))))))

@@ -1,4 +1,4 @@
-(ns lotuc.examples.fsm
+(ns lotuc.examples.akka.fsm
   (:require
    [lotuc.akka.behaviors :as behaviors]
    [lotuc.akka.system :refer [create-system]])

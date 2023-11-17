@@ -1,4 +1,4 @@
-(ns lotuc.akka-clojure-examples.quickstart
+(ns lotuc.examples.akka-clojure.quickstart
   (:require
    [lotuc.akka-clojure :as a]
    [lotuc.akka.system :refer [create-system]]))

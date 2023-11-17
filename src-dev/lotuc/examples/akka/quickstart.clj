@@ -1,4 +1,4 @@
-(ns lotuc.examples.quickstart
+(ns lotuc.examples.akka.quickstart
   (:require
    [lotuc.akka.behaviors :as behaviors]
    [lotuc.akka.system :refer [create-system]]))

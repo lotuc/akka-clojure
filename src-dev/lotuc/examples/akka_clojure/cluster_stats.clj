@@ -1,4 +1,4 @@
-(ns lotuc.akka-clojure-examples.cluster-stats
+(ns lotuc.examples.akka-clojure.cluster-stats
   (:require
    [clojure.string :as s]
    [lotuc.akka-clojure :as a]
@@ -7,13 +7,12 @@
    [lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.actor.typed.javadsl Routers)
-   (akka.actor.typed.receptionist ServiceKey)
    (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; stats
 
-(def stats-service-key (ServiceKey/create Object "StatsService"))
+(def stats-service-key (receptionist/create-service-key Object "StatsService"))
 
 (a/setup stats-worker [] {:with-timer true}
   (a/info "Worker starting up")

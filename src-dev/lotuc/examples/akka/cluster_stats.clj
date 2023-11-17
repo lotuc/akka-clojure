@@ -1,4 +1,4 @@
-(ns lotuc.examples.cluster-stats
+(ns lotuc.examples.akka.cluster-stats
   (:require
    [clojure.string :as s]
    [lotuc.akka.behaviors :as behaviors]

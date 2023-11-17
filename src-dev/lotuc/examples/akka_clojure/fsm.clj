@@ -1,4 +1,4 @@
-(ns lotuc.akka-clojure-examples.fsm
+(ns lotuc.examples.akka-clojure.fsm
   (:require
    [lotuc.akka-clojure :as a]
    [lotuc.akka.system :refer [create-system]])

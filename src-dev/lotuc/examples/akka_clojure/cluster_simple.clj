@@ -1,4 +1,4 @@
-(ns lotuc.akka-clojure-examples.cluster-simple
+(ns lotuc.examples.akka-clojure.cluster-simple
   (:require
    [lotuc.akka-clojure :as a]
    [lotuc.akka.system :refer [create-system-from-config]]

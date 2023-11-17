@@ -1,4 +1,4 @@
-(ns lotuc.examples.cluster-simple
+(ns lotuc.examples.akka.cluster-simple
   (:require
    [lotuc.akka.behaviors :as behaviors]
    [lotuc.akka.cluster :as cluster]
