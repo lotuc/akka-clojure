@@ -1,19 +1,19 @@
 (ns org.lotuc.akka-clojure-examples.cluster-simple
   (:require
    [org.lotuc.akka-clojure :as a]
-   [org.lotuc.akka.system :refer [create-system-from-config]])
+   [org.lotuc.akka.system :refer [create-system-from-config]]
+   [org.lotuc.akka.cluster :as cluster])
   (:import
-   (akka.cluster ClusterEvent$MemberEvent ClusterEvent$ReachabilityEvent)
-   (akka.cluster.typed Cluster Subscribe)))
+   (akka.cluster ClusterEvent$MemberEvent ClusterEvent$ReachabilityEvent)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; simple
 
 (a/setup cluster-listener []
-  (let [cluster (Cluster/get (a/system))]
+  (let [cluster (a/cluster)]
     (doto (.subscriptions cluster)
-      (a/tell (Subscribe/create (a/self) ClusterEvent$MemberEvent))
-      (a/tell (Subscribe/create (a/self) ClusterEvent$ReachabilityEvent)))
+      (a/tell (cluster/create-subscribe (a/self) ClusterEvent$MemberEvent))
+      (a/tell (cluster/create-subscribe (a/self) ClusterEvent$ReachabilityEvent)))
     (a/receive-message
      (fn [m] (a/info "recv: {} - {}" (class m) (bean m))))))
 

@@ -2,13 +2,11 @@
   (:require
    [clojure.string :as s]
    [org.lotuc.akka-clojure :as a]
-   [org.lotuc.akka.system :refer [create-system-from-config]])
+   [org.lotuc.akka.system :refer [create-system-from-config]]
+   [org.lotuc.akka.cluster :as cluster])
   (:import
    (akka.actor.typed.javadsl Routers)
    (akka.actor.typed.receptionist Receptionist ServiceKey)
-   (akka.cluster.typed ClusterSingleton ClusterSingletonSettings)
-   (akka.cluster.typed SingletonActor)
-   (akka.cluster.typed Cluster)
    (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
@@ -91,7 +89,7 @@
 ;;; corresponds to original example's App.java
 (a/setup root-behavior []
   (let [system (a/system)
-        cluster (Cluster/get (a/system))
+        cluster (a/cluster)
         self-member (.selfMember cluster)]
     (cond
       (.hasRole self-member "compute")
@@ -132,13 +130,13 @@
 ;;; corresponds to original example's AppOneMaster.java
 (a/setup root-behavior-one-master []
   (let [system (a/system)
-        cluster (Cluster/get system)
-        singleton-settings (-> (ClusterSingletonSettings/create system)
-                               (.withRole "compute"))
-        service-singleton (-> (SingletonActor/of (routed-stat-service) "StatsService")
-                              (.withStopMessage :Stop)
-                              (.withSettings singleton-settings))
-        service-proxy (-> (ClusterSingleton/get system)
+        cluster (a/cluster)
+        service-singleton (->> {:stop-message :Stop
+                                :settings (a/create-cluster-singleton-setting
+                                           {:role "compute"})}
+                               (cluster/singleton-actor-of
+                                (routed-stat-service) "StatsService"))
+        service-proxy (-> (a/cluster-singleton)
                           (.init service-singleton))
         self-member (.selfMember cluster)]
     (cond

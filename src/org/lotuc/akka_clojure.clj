@@ -1,7 +1,8 @@
 (ns org.lotuc.akka-clojure
   (:require
    [org.lotuc.akka.behaviors :as behaviors]
-   [org.lotuc.akka.java-dsl :as dsl]))
+   [org.lotuc.akka.java-dsl :as dsl]
+   [org.lotuc.akka.cluster :as cluster]))
 
 ;;; Dyanmic bindings for message & signal handlers
 (def ^:dynamic *local-context* nil)
@@ -38,6 +39,23 @@
   "ActorSystem of local context."
   []
   (.getSystem (actor-context)))
+
+(defn cluster []
+  (cluster/get-cluster (system)))
+
+(defn cluster-singleton []
+  (cluster/get-cluster-singleton (system)))
+
+(defn create-cluster-singleton-setting
+  ([] (cluster/create-cluster-singleton-setting (system)))
+  ([{:keys [buffer-size
+            data-center
+            hand-over-retry-interval
+            lease-settings
+            role
+            removal-margin]
+     :as opts}]
+   (cluster/create-cluster-singleton-setting (system) opts)))
 
 (defn tell
   "Send message to target. Send to self if not target given"

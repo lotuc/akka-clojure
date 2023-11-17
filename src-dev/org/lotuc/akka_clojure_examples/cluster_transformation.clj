@@ -5,7 +5,6 @@
    [org.lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.actor.typed.receptionist Receptionist Receptionist$Listing ServiceKey)
-   (akka.cluster.typed Cluster)
    (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
@@ -82,7 +81,7 @@
   (.terminate s))
 
 (a/setup root-behavior []
-  (let [cluster (Cluster/get (a/system))
+  (let [cluster (a/cluster)
         self-member (.selfMember cluster)]
     (a/info "starting: backend={} frontend={}"
             (.hasRole self-member "backend")
