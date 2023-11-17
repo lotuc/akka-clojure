@@ -1,8 +1,8 @@
 (ns org.lotuc.akka-clojure-examples.fsm
   (:require
-   [org.lotuc.akka-clojure :as a])
+   [org.lotuc.akka-clojure :as a]
+   [org.lotuc.akka.system :refer [create-system]])
   (:import
-   (akka.actor.typed ActorSystem)
    (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-fsm-java
@@ -91,5 +91,5 @@
       (a/! hakker {:action :Think}))))
 
 (comment
-  (def s (ActorSystem/create (dining-behavior) "helloakka"))
+  (def s (create-system (dining-behavior) "helloakka"))
   (.terminate s))

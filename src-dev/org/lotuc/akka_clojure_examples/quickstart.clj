@@ -1,8 +1,7 @@
 (ns org.lotuc.akka-clojure-examples.quickstart
   (:require
-   [org.lotuc.akka-clojure :as a])
-  (:import
-   (akka.actor.typed ActorSystem)))
+   [org.lotuc.akka-clojure :as a]
+   [org.lotuc.akka.system :refer [create-system]]))
 
 ;;; https://developer.lightbend.com/guides/akka-quickstart-java/
 
@@ -44,7 +43,7 @@
            (a/! greeter {:whom whom :reply-to bot})))))))
 
 (comment
-  (def s (ActorSystem/create (greeter-main) "helloakka"))
-  (def s (ActorSystem/create (greeter-main-1) "helloakka"))
+  (def s (create-system (greeter-main) "helloakka"))
+  (def s (create-system (greeter-main-1) "helloakka"))
   (.terminate s)
   (a/tell s {:whom "42"}))

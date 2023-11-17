@@ -1,8 +1,7 @@
 (ns org.lotuc.examples.quickstart
   (:require
-   [org.lotuc.akka.behaviors :as behaviors])
-  (:import
-   (akka.actor.typed ActorSystem)))
+   [org.lotuc.akka.behaviors :as behaviors]
+   [org.lotuc.akka.system :refer [create-system]]))
 
 ;;; https://developer.lightbend.com/guides/akka-quickstart-java/
 
@@ -38,6 +37,6 @@
               (.tell greeter {:whom whom :reply-to bot})))))))))
 
 (comment
-  (def s (ActorSystem/create (greeter-main) "helloakka"))
+  (def s (create-system (greeter-main) "helloakka"))
   (.terminate s)
   (.tell s {:whom "42"}))

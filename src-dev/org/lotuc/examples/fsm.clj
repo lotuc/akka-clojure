@@ -1,9 +1,8 @@
 (ns org.lotuc.examples.fsm
   (:require
-   [org.lotuc.akka.behaviors :as behaviors])
+   [org.lotuc.akka.behaviors :as behaviors]
+   [org.lotuc.akka.system :refer [create-system]])
   (:import
-   (akka.actor.typed ActorSystem)
-   (akka.actor.typed.javadsl Behaviors)
    (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-fsm-java
@@ -80,12 +79,11 @@
              (start-eating [duration]
                (.scheduleOnce ctx duration (.getSelf ctx) {:action :Think})
                (eating))]
-       (Behaviors/receiveMessage
-        (reify akka.japi.Function
-          (apply [_ {:keys [action]}]
-            (when (= action :Think)
-              (info ctx "{} starts to think" name)
-              (start-thinking (Duration/ofSeconds 3))))))))))
+       (behaviors/receive-message
+        (fn [{:keys [action]}]
+          (when (= action :Think)
+            (info ctx "{} starts to think" name)
+            (start-thinking (Duration/ofSeconds 3)))))))))
 
 (def dining-behavior
   (behaviors/setup
@@ -102,5 +100,5 @@
          (.tell hakker {:action :Think}))))))
 
 (comment
-  (def s (ActorSystem/create dining-behavior "helloakka"))
+  (def s (create-system dining-behavior "helloakka"))
   (.terminate s))

@@ -1,12 +1,10 @@
 (ns org.lotuc.examples.cluster-simple
   (:require
-   [org.lotuc.akka.behaviors :as behaviors])
+   [org.lotuc.akka.behaviors :as behaviors]
+   [org.lotuc.akka.system :refer [create-system-from-config]])
   (:import
-   (com.typesafe.config ConfigFactory)
-   (akka.actor.typed ActorSystem)
-   (akka.cluster.typed Cluster Subscribe)
-   (akka.cluster ClusterEvent$MemberEvent
-                 ClusterEvent$ReachabilityEvent)))
+   (akka.cluster ClusterEvent$MemberEvent ClusterEvent$ReachabilityEvent)
+   (akka.cluster.typed Cluster Subscribe)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; simple
@@ -32,11 +30,11 @@
      :empty)))
 
 (defn startup [port]
-  (let [overrides {"akka.remote.artery.canonical.port" port}
-        config (-> (ConfigFactory/parseMap overrides)
-                   ;; load application.conf by default
-                   (.withFallback (ConfigFactory/load "cluster-application.conf")))]
-    (ActorSystem/create root-behavior "ClusterSystem" config)))
+  (create-system-from-config
+   root-behavior
+   "ClusterSystem"
+   "cluster-application.conf"
+   {"akka.remote.artery.canonical.port" port}))
 
 (comment
   (do

@@ -1,12 +1,11 @@
 (ns org.lotuc.examples.cluster-transformation
   (:require
+   [clojure.string :as s]
    [org.lotuc.akka.behaviors :as behaviors]
-   [clojure.string :as s])
+   [org.lotuc.akka.system :refer [create-system-from-config]])
   (:import
-   (com.typesafe.config ConfigFactory)
+   (akka.actor.typed.receptionist Receptionist Receptionist$Listing ServiceKey)
    (akka.cluster.typed Cluster)
-   (akka.actor.typed ActorSystem)
-   (akka.actor.typed.receptionist Receptionist ServiceKey Receptionist$Listing)
    (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
@@ -99,11 +98,11 @@
         (fn [m] (println "recv:" m)))))))
 
 (comment
-  (def s (ActorSystem/create
-          (worker-test) "ClusterSystem"
-          (-> (ConfigFactory/parseMap
-               {"akka.actor.serialize-messages" "on"})
-              (.withFallback (ConfigFactory/load "cluster-application")))))
+  (def s (create-system-from-config
+          (worker-test)
+          "ClusterSystem"
+          "cluster-application"
+          {"akka.actor.serialize-messages" "on"}))
   (.terminate s))
 
 (defn root-behavior []
@@ -126,12 +125,12 @@
        :empty))))
 
 (defn startup [role port]
-  (let [overrides {"akka.remote.artery.canonical.port" port
-                   "akka.cluster.roles" [role]}
-        config (-> (ConfigFactory/parseMap overrides)
-                   ;; loads transformation.conf
-                   (.withFallback (ConfigFactory/load "cluster-transformation")))]
-    (ActorSystem/create (root-behavior) "ClusterSystem" config)))
+  (create-system-from-config
+   (root-behavior)
+   "ClusterSystem"
+   "cluster-transformation"
+   {"akka.remote.artery.canonical.port" port
+    "akka.cluster.roles" [role]}))
 
 (comment
   (do (def s0 (startup "backend" 25251))

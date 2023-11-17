@@ -1,15 +1,14 @@
 (ns org.lotuc.examples.cluster-stats
   (:require
+   [clojure.string :as s]
    [org.lotuc.akka.behaviors :as behaviors]
-   [clojure.string :as s])
+   [org.lotuc.akka.system :refer [create-system-from-config]])
   (:import
-   (akka.cluster.typed ClusterSingletonSettings ClusterSingleton)
-   (akka.cluster.typed SingletonActor)
-   (akka.actor.typed ActorSystem)
    (akka.actor.typed.javadsl Routers)
-   (akka.actor.typed.receptionist ServiceKey Receptionist)
+   (akka.actor.typed.receptionist Receptionist ServiceKey)
+   (akka.cluster.typed ClusterSingleton ClusterSingletonSettings)
+   (akka.cluster.typed SingletonActor)
    (akka.cluster.typed Cluster)
-   (com.typesafe.config ConfigFactory)
    (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
@@ -171,12 +170,13 @@
              :empty))))))
 
 (defn startup [behavior role port]
-  (let [overrides {"akka.remote.artery.canonical.port" port
-                   "stats-service.workers-per-node" 2
-                   "akka.cluster.roles" [role]}
-        config (-> (ConfigFactory/parseMap overrides)
-                   (.withFallback (ConfigFactory/load "cluster-application.conf")))]
-    (ActorSystem/create behavior "ClusterSystem" config)))
+  (create-system-from-config
+   behavior
+   "ClusterSystem"
+   "cluster-application.conf"
+   {"akka.remote.artery.canonical.port" port
+    "stats-service.workers-per-node" 2
+    "akka.cluster.roles" [role]}))
 
 (comment
   (let [behavior (root-behavior-one-master)]
