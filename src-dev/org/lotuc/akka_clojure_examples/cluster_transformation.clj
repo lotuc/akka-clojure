@@ -15,8 +15,7 @@
 
 (a/setup frontend [] {:with-timer true}
   (let [!workers (atom []) !job-counter (atom 0)]
-    (.. (a/system) receptionist
-        (a/tell (receptionist/subscribe worker-secret-key (a/self))))
+    (a/subscribe-to-receptionist worker-secret-key)
     (a/start-timer :Tick {:timer-key :Tick
                           :timer-type :fix-delay
                           :delay (Duration/ofSeconds 2)})
@@ -60,8 +59,7 @@
 
 (a/setup worker []
   (a/info "Registering myself with receptionist")
-  (.. (a/system) receptionist
-    (a/tell (receptionist/register worker-secret-key (a/self))))
+  (a/register-with-receptionist worker-secret-key)
   (a/receive-message
     (fn [{:keys [action text reply-to] :as m}]
       (a/tell reply-to {:action :TextTransformed :text (s/upper-case text)}))))

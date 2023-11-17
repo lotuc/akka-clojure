@@ -1,8 +1,9 @@
 (ns org.lotuc.akka-clojure
   (:require
    [org.lotuc.akka.behaviors :as behaviors]
+   [org.lotuc.akka.cluster :as cluster]
    [org.lotuc.akka.java-dsl :as dsl]
-   [org.lotuc.akka.cluster :as cluster]))
+   [org.lotuc.akka.receptionist :as receptionist]))
 
 ;;; Dyanmic bindings for message & signal handlers
 (def ^:dynamic *local-context* nil)
@@ -46,16 +47,8 @@
 (defn cluster-singleton []
   (cluster/get-cluster-singleton (system)))
 
-(defn create-cluster-singleton-setting
-  ([] (cluster/create-cluster-singleton-setting (system)))
-  ([{:keys [buffer-size
-            data-center
-            hand-over-retry-interval
-            lease-settings
-            role
-            removal-margin]
-     :as opts}]
-   (cluster/create-cluster-singleton-setting (system) opts)))
+(defn receptionist []
+  (.receptionist (system)))
 
 (defn tell
   "Send message to target. Send to self if not target given"
@@ -185,6 +178,32 @@
   [msg {:keys [timer-key timer-type interval initial-delay delay]
         :as opts}]
   (dsl/start-timer (timers) msg opts))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Cluster & receptionist
+
+(defn create-cluster-singleton-setting
+  ([] (cluster/create-cluster-singleton-setting (system)))
+  ([{:keys [buffer-size
+            data-center
+            hand-over-retry-interval
+            lease-settings
+            role
+            removal-margin]
+     :as opts}]
+   (cluster/create-cluster-singleton-setting (system) opts)))
+
+(defn register-with-receptionist
+  ([worker-service-key]
+   (.tell (receptionist) (receptionist/register worker-service-key (self))))
+  ([worker-service-key reply-to]
+   (.tell (receptionist) (receptionist/register worker-service-key reply-to))))
+
+(defn subscribe-to-receptionist
+  ([worker-service-key]
+   (.tell (receptionist) (receptionist/subscribe worker-service-key (self))))
+  ([worker-service-key reply-to]
+   (.tell (receptionist) (receptionist/subscribe worker-service-key reply-to))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Log
