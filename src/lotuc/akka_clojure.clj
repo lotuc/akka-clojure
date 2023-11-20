@@ -71,7 +71,10 @@
            (apply [_ reply-to] (assoc msg :reply-to reply-to)))
          (reify akka.japi.function.Function2
            (apply [_ res throwable]
-             (apply-to-response res throwable))))))
+             (apply-to-response res throwable)))))
+  ([system msg timeout]
+   (future (.get (dsl/ask system (fn [reply-to] (assoc msg :reply-to reply-to))
+                          timeout (.scheduler system))))))
 
 (defn schedule-once
   ([target duration message]

@@ -2,11 +2,11 @@
   (:require
    [lotuc.akka.behaviors :as behaviors]
    [lotuc.akka.ddata :as ddata]
+   [lotuc.akka.java-dsl :as java-dsl]
    [lotuc.akka.ddata-java-dsl :as ddata-java-dsl]
    [lotuc.akka.system :refer [create-system-from-config]])
   (:import
-   (java.time Duration)
-   (akka.actor.typed.javadsl AskPattern)))
+   (java.time Duration)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-distributed-data-java
 ;;; VotingService
@@ -166,13 +166,11 @@
    {"akka.remote.artery.canonical.port" port}))
 
 (defn get-votes [^akka.actor.typed.ActorSystem system]
-  (-> (AskPattern/ask
+  (-> (java-dsl/ask
        system
-       (reify akka.japi.function.Function
-         (apply [_ reply-to] {:action :GetVotes :reply-to reply-to}))
+       (fn [reply-to] {:action :GetVotes :reply-to reply-to})
        (Duration/ofSeconds 5)
        (.scheduler system))
-      (.toCompletableFuture)
       (.get)))
 
 (comment

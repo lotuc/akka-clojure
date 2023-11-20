@@ -1,4 +1,8 @@
-(ns lotuc.akka.java-dsl)
+(ns lotuc.akka.java-dsl
+  (:import
+   [akka.actor.typed.javadsl AskPattern]))
+
+(set! *warn-on-reflection* true)
 
 (defprotocol TimerScheduler
   (cancel-timer [_ timer-key])
@@ -38,3 +42,11 @@
                      (.startTimerAtFixedRate this msg initial-delay interval)
                      (.startTimerAtFixedRate this msg interval))))))
 
+(defn ask
+  ^java.util.concurrent.CompletableFuture [actor build-msg timeout scheduler]
+  (-> (AskPattern/ask actor
+                      (reify akka.japi.function.Function
+                        (apply [_ reply-to] (build-msg reply-to)))
+                      timeout
+                      scheduler)
+      (.toCompletableFuture)))
