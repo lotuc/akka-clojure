@@ -3,6 +3,8 @@
    [lotuc.akka.behaviors :as behaviors]
    [lotuc.akka.system :refer [create-system]]))
 
+(set! *warn-on-reflection* true)
+
 ;;; https://developer.lightbend.com/guides/akka-quickstart-java/
 
 (defmacro info [ctx msg & args]
@@ -10,7 +12,8 @@
 
 (defn greeter-behavior []
   (behaviors/receive
-   (fn [ctx {:keys [whom reply-to]}]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx
+        {:keys [whom ^akka.actor.typed.ActorRef reply-to]}]
      (when whom
        (info ctx "Hello {}!" whom)
        (.tell reply-to {:whom whom :reply-to (.getSelf ctx)})))))
@@ -18,7 +21,8 @@
 (defn greeter-bot-behavior [max]
   (let [greeter-counter (atom 0)]
     (behaviors/receive
-     (fn [ctx {:keys [whom reply-to]}]
+     (fn [^akka.actor.typed.javadsl.ActorContext ctx
+          {:keys [whom ^akka.actor.typed.ActorRef reply-to]}]
        (when whom
          (swap! greeter-counter inc)
          (info ctx "Greeting {} for {}" @greeter-counter whom)
@@ -28,7 +32,7 @@
 
 (defn greeter-main []
   (behaviors/setup
-   (fn [ctx]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
      (let [greeter (.spawn ctx (greeter-behavior) "greeter")]
        (behaviors/receive-message
         (fn [{:keys [whom] :as m}]

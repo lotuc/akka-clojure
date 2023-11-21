@@ -5,6 +5,8 @@
                        ClusterSingletonSettings
                        SingletonActor)))
 
+(set! *warn-on-reflection* true)
+
 ;;; ClusterEvent
 ;;; https://doc.akka.io/japi/akka/current/akka/cluster/ClusterEvent.html
 
@@ -17,15 +19,14 @@
 ;;; Cluster
 ;;; https://doc.akka.io/japi/akka/current/akka/cluster/typed/Cluster.html
 
-(defn get-cluster [system]
+(defn get-cluster ^akka.cluster.typed.Cluster [system]
   (Cluster/get system))
 
 ;;; ClusterSingleton
 ;;; https://doc.akka.io/japi/akka/current/akka/cluster/typed/ClusterSingleton.html
 ;;; for testing purpose
 
-(defn get-cluster-singleton
-  [system]
+(defn get-cluster-singleton ^akka.cluster.typed.ClusterSingleton [system]
   (ClusterSingleton/get system))
 
 ;;; ClusterSingletonSettings
@@ -35,10 +36,10 @@
   ([system] (ClusterSingletonSettings/create system))
   ([system {:keys [buffer-size
                    data-center
-                   hand-over-retry-interval
+                   ^java.time.Duration hand-over-retry-interval
                    lease-settings
                    role
-                   removal-margin]
+                   ^java.time.Duration removal-margin]
             :as opts}]
    (cond-> (ClusterSingletonSettings/create system)
      buffer-size
@@ -48,15 +49,16 @@
      (.withHandoverRetryInterval hand-over-retry-interval)
 
      lease-settings
-     (.withLeaseSettings​ lease-settings)
+     (.withLeaseSettings lease-settings)
 
      removal-margin
-     (.withRemovalMargin​ removal-margin)
+     (.withRemovalMargin removal-margin)
 
      (some? data-center)
-     (as-> $ (if (false? data-center)
-               (.withNoDataCenter $)
-               (.withDataCenter $ data-center)))
+     (as-> $ (let [^akka.cluster.typed.ClusterSingletonSettings v $]
+               (if (false? data-center)
+                 (.withNoDataCenter v)
+                 (.withDataCenter v data-center))))
 
      (some? role)
      (as-> $ (if (false? role)

@@ -9,6 +9,8 @@
    (akka.actor.typed.javadsl Routers)
    (java.time Duration)))
 
+(set! *warn-on-reflection* true)
+
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; stats
 
@@ -114,7 +116,7 @@
         (a/spawn (stats-service-client service-router) "Client")
         :empty))))
 
-(def worker-service-key (ServiceKey/create Object "Worker"))
+(def worker-service-key (receptionist/create-service-key "Worker"))
 
 (a/setup routed-stat-service []
   (let [worker-group-behavior

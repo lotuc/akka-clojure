@@ -8,6 +8,8 @@
    (akka.actor.typed.receptionist Receptionist$Listing)
    (java.time Duration)))
 
+(set! *warn-on-reflection* true)
+
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; transformation
 
@@ -52,7 +54,7 @@
            (a/warn "Unkown action type: {} {}" action m))
 
          (instance? Receptionist$Listing m)
-         (let [workers (into [] (.getServiceInstances m worker-service-key))]
+         (let [workers (into [] (.getServiceInstances ^Receptionist$Listing m worker-service-key))]
            (reset! !workers workers)
            (a/info "List of services registered with the receptionist changed: {}" workers)
            :same))))))

@@ -3,6 +3,8 @@
    [lotuc.akka-clojure :as a]
    [lotuc.akka.system :refer [create-system]]))
 
+(set! *warn-on-reflection* true)
+
 ;;; https://developer.lightbend.com/guides/akka-quickstart-java/
 
 (defn greeter-behavior []

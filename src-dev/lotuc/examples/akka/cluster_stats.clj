@@ -9,6 +9,8 @@
    (akka.actor.typed.javadsl Routers)
    (java.time Duration)))
 
+(set! *warn-on-reflection* true)
+
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; stats
 
@@ -17,7 +19,9 @@
 
 (def stats-service-key (receptionist/create-service-key "StatsService"))
 
-(defn- stats-worker* [{:keys [context timers]}]
+(defn- stats-worker*
+  [{:keys [^akka.actor.typed.javadsl.ActorContext context
+           ^akka.actor.typed.javadsl.TimerScheduler timers]}]
   (info context "Worker starting up")
   (.startTimerWithFixedDelay timers :EvictCache :EvictCache (Duration/ofSeconds 30))
   (let [!cache (atom {})]
@@ -28,18 +32,20 @@
          (do (reset! !cache {}) :same)
 
          (= action :Process)
-         (let [{:keys [word reply-to]} m]
+         (let [{:keys [word ^akka.actor.typed.ActorRef reply-to]} m]
            (info context "Worker processing request [{}]" word)
            (let [length (get (swap! !cache update word (fn [v] (or v (count word)))) word)]
              (.tell reply-to {:action :Processed :word word :length length}))
            :same))))))
 
-(defn stats-worker []
+(defn stats-worker ^akka.actor.typed.Behavior []
   (behaviors/setup stats-worker* {:with-timer true}))
 
-(defn stats-aggregator [words workers reply-to]
+(defn stats-aggregator [words
+                        ^akka.actor.typed.ActorRef workers
+                        ^akka.actor.typed.ActorRef reply-to]
   (behaviors/setup
-   (fn [ctx]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
      (let [expected-responses (count words)
            !results (atom [])]
        (.setReceiveTimeout ctx (Duration/ofSeconds 3) :Timeout)
@@ -64,7 +70,7 @@
 
 (defn stats-service [workers]
   (behaviors/receive
-   (fn [ctx {:keys [action] :as m}]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx {:keys [action] :as m}]
      (cond
        (= m :Stop)
        :stopped
@@ -76,7 +82,9 @@
          :same)))))
 
 (defn- stats-service-client*
-  [service {:keys [context timers]}]
+  [^akka.actor.typed.ActorRef service
+   {:keys [^akka.actor.typed.javadsl.ActorContext context
+           ^akka.actor.typed.javadsl.TimerScheduler timers]}]
   (.startTimerWithFixedDelay timers :Tick :Tick (Duration/ofSeconds 2))
   (behaviors/receive-message
    (fn [{:keys [action] :as m}]
@@ -98,7 +106,7 @@
 ;;; corresponds to original example's App.java
 (defn root-behavior []
   (behaviors/setup
-   (fn [ctx]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
      (let [cluster (cluster/get-cluster (.getSystem ctx))
            self-member (.selfMember cluster)]
        (cond
@@ -129,11 +137,11 @@
 ;;; corresponds to original example's AppOneMaster.java
 (defn root-behavior-one-master []
   (behaviors/setup
-   (fn [ctx]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
      (let [system (.getSystem ctx)
            cluster (cluster/get-cluster system)
            service-behavior (behaviors/setup
-                             (fn [singleton-ctx]
+                             (fn [^akka.actor.typed.javadsl.ActorContext singleton-ctx]
                                (let [worker-group-behavior
                                      (-> (Routers/group worker-service-key)
                                          (.withConsistentHashingRouting

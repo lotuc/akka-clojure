@@ -3,6 +3,8 @@
    (akka.actor.typed ActorSystem)
    (com.typesafe.config ConfigFactory)))
 
+(set! *warn-on-reflection* true)
+
 ;;; ActorSystem
 ;;; https://doc.akka.io/japi/akka/current/akka/actor/typed/ActorSystem.html
 ;;; ConfigFactory
@@ -21,22 +23,24 @@
     \"cluster-transformation.conf\"    ; the .conf extension can be ignored
     {\"akka.remote.artery.canonical.port\" port})
   ```"
-  ([guardian-behavior name config-file]
-   (create-system-from-config guardian-behavior name config-file nil))
-  ([guardian-behavior name resource-base-name overrides-config]
-   (cond
-     (and (not resource-base-name) (not overrides-config))
+  ([^akka.actor.typed.Behavior guardian-behavior
+    ^String name
+    ^String config-resource-base-name]
+   (create-system-from-config guardian-behavior name config-resource-base-name nil))
+  ([^akka.actor.typed.Behavior guardian-behavior
+    ^String name
+    ^String config-resource-base-name
+    ^java.util.Map overrides-config]
+   (if (and (not config-resource-base-name) (not overrides-config))
      (ActorSystem/create guardian-behavior name)
+     (let [config (cond
+                    (and config-resource-base-name overrides-config)
+                    (-> (ConfigFactory/parseMap overrides-config)
+                        (.withFallback (ConfigFactory/load config-resource-base-name)))
 
-     (and resource-base-name overrides-config)
-     (ActorSystem/create guardian-behavior name
-                         (-> (ConfigFactory/parseMap overrides-config)
-                             (.withFallback (ConfigFactory/load resource-base-name))))
+                    config-resource-base-name
+                    (ConfigFactory/load config-resource-base-name)
 
-     resource-base-name
-     (ActorSystem/create guardian-behavior name
-                         (ConfigFactory/load resource-base-name))
-
-     :else
-     (ActorSystem/create guardian-behavior name
-                         (ConfigFactory/parseMap overrides-config)))))
+                    :else
+                    (ConfigFactory/parseMap overrides-config))]
+       (ActorSystem/create guardian-behavior name config)))))

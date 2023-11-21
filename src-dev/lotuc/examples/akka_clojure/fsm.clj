@@ -5,6 +5,8 @@
   (:import
    (java.time Duration)))
 
+(set! *warn-on-reflection* true)
+
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-fsm-java
 
 (a/setup chopstck-behavior []
@@ -25,21 +27,23 @@
                  (available)))))]
     (available)))
 
-(a/setup hakker-behavior [name left right]
+(a/setup hakker-behavior [hakker-name
+                          ^akka.actor.typed.ActorRef left-chopstick
+                          ^akka.actor.typed.ActorRef right-chopstick]
   (letfn [(thinking []
             (a/receive-message
              (fn [{:keys [action]}]
                (when (= action :Eat)
-                 (a/! left {:action :Take :hakker (a/self)})
-                 (a/! right {:action :Take :hakker (a/self)})
+                 (a/! left-chopstick {:action :Take :hakker (a/self)})
+                 (a/! right-chopstick {:action :Take :hakker (a/self)})
                  (hungry)))))
           (hungry []
             (a/receive-message
              (fn [{:keys [chopstick taken?]}]
                (if taken?
                  (cond
-                   (= chopstick left) (wait-for-other-chopstick right left)
-                   (= chopstick right) (wait-for-other-chopstick left right))
+                   (= chopstick left-chopstick) (wait-for-other-chopstick right-chopstick left-chopstick)
+                   (= chopstick right-chopstick) (wait-for-other-chopstick left-chopstick right-chopstick))
                  (first-chopstick-denied)))))
           (wait-for-other-chopstick [chopstick-to-wait-for taken-chopstick]
             (a/receive-message
@@ -47,7 +51,7 @@
                (when (= chopstick chopstick-to-wait-for)
                  (if taken?
                    (do (a/info "{} picked up {} and {} and starts to eat"
-                               name (.. left path name) (.. right path name))
+                               hakker-name (.. left-chopstick path name) (.. right-chopstick path name))
                        (start-eating (Duration/ofSeconds 5)))
                    (do (a/! taken-chopstick {:action :Put :hakker (a/self)})
                        (start-thinking (Duration/ofMillis 10))))))))
@@ -55,9 +59,9 @@
             (a/receive-message
              (fn [{:keys [action]}]
                (when (= action :Think)
-                 (a/info "{} puts down his chopsticks and starts to think" name)
-                 (a/! left {:action :Put :hakker (a/self)})
-                 (a/! right {:action :Put :hakker (a/self)})
+                 (a/info "{} puts down his chopsticks and starts to think" hakker-name)
+                 (a/! left-chopstick {:action :Put :hakker (a/self)})
+                 (a/! right-chopstick {:action :Put :hakker (a/self)})
                  (start-thinking (Duration/ofSeconds 5))))))
           (first-chopstick-denied []
             (a/receive-message
@@ -75,7 +79,7 @@
     (a/receive-message
      (fn [{:keys [action]}]
        (when (= action :Think)
-         (a/info "{} starts to think" name)
+         (a/info "{} starts to think" hakker-name)
          (start-thinking (Duration/ofSeconds 3)))))))
 
 (a/setup dining-behavior []

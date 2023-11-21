@@ -9,6 +9,8 @@
    (akka.actor.typed.receptionist Receptionist$Listing)
    (java.time Duration)))
 
+(set! *warn-on-reflection* true)
+
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; transformation
 
@@ -21,7 +23,10 @@
 (def worker-service-key (receptionist/create-service-key "Worker"))
 
 (defn frontend*
-  [!workers !job-counter {:keys [timers context] :as i}]
+  [!workers !job-counter
+   {:keys [^akka.actor.typed.javadsl.TimerScheduler timers
+           ^akka.actor.typed.javadsl.ActorContext context]
+    :as i}]
   (.. context getSystem receptionist
       (tell (receptionist/subscribe worker-service-key (.getSelf context))))
   (.. timers
@@ -67,7 +72,7 @@
          (warn context "Unkown action type: {} {}" action m))
 
        (instance? Receptionist$Listing m)
-       (let [workers (into [] (.getServiceInstances m worker-service-key))]
+       (let [workers (into [] (.getServiceInstances ^Receptionist$Listing m worker-service-key))]
          (reset! !workers workers)
          (info context "List of services registered with the receptionist changed: {}"
                workers)
@@ -80,17 +85,17 @@
 
 (defn worker []
   (behaviors/setup
-   (fn [ctx]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
      (info ctx "Registering myself with receptionist")
      (.. ctx getSystem receptionist
          (tell (receptionist/register worker-service-key (.narrow (.getSelf ctx)))))
      (behaviors/receive-message
-      (fn [{:keys [action text reply-to] :as m}]
+      (fn [{:keys [action text ^akka.actor.typed.ActorRef reply-to] :as m}]
         (.tell reply-to {:action :TextTransformed :text (s/upper-case text)}))))))
 
 (defn worker-test []
   (behaviors/setup
-   (fn [ctx]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
      (let [w (.spawn ctx (worker) "worker0")]
        (let [reply-to (.getSelf ctx)]
          (.tell w {:action :TransformText :text "hello world"
@@ -108,7 +113,7 @@
 
 (defn root-behavior []
   (behaviors/setup
-   (fn [ctx]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
      (let [cluster (cluster/get-cluster (.getSystem ctx))
            self-member (.selfMember cluster)]
        (info ctx "starting: backend={} frontend={}"

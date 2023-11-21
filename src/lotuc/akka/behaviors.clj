@@ -6,6 +6,8 @@
    (akka.actor.typed.javadsl Behaviors)
    (org.slf4j.event Level)))
 
+(set! *warn-on-reflection* true)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Behaviors API
 ;; https://doc.akka.io/japi/akka/current/akka/actor/typed/javadsl/Behaviors$.html
@@ -40,12 +42,14 @@
   (setup (fn [{:keys [context timers stash-buffer]}] returns behavior)
          {:with-timer true :with-stash {:capacity 2}})
   ```"
-  ([factory]
+  (^akka.actor.typed.Behavior
+   [factory]
    (Behaviors/setup
     (reify akka.japi.function.Function
       (apply [_ ctx]
         (->behavior (factory ctx) :nil-behavior (Behaviors/empty))))))
-  ([factory {timer? :with-timer stash-opts :with-stash :as opts}]
+  (^akka.actor.typed.Behavior
+   [factory {timer? :with-timer stash-opts :with-stash :as opts}]
    (cond
      timer?
      (with-timers
@@ -136,7 +140,7 @@
   "
   ([^Behavior behavior
     ^Class intercept-message-class
-    {:keys [static-mdc mdc-for-message]}]
+    {:keys [^java.util.Map static-mdc mdc-for-message]}]
    (cond
      (and static-mdc mdc-for-message)
      (Behaviors/withMdc intercept-message-class static-mdc

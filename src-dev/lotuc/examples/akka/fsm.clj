@@ -5,6 +5,8 @@
   (:import
    (java.time Duration)))
 
+(set! *warn-on-reflection* true)
+
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-fsm-java
 
 (defmacro info [ctx msg & args]
@@ -12,16 +14,16 @@
 
 (def chopstck-behavior
   (behaviors/setup
-   (fn [ctx]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
      (letfn [(available []
                (behaviors/receive-message
-                (fn [{:keys [action hakker]}]
+                (fn [{:keys [action ^akka.actor.typed.ActorRef hakker]}]
                   (when (= action :Take)
                     (.tell hakker {:chopstick (.getSelf ctx) :taken? true})
                     (taken-by hakker)))))
              (taken-by [hakker-holder]
                (behaviors/receive-message
-                (fn [{:keys [action hakker]}]
+                (fn [{:keys [action ^akka.actor.typed.ActorRef hakker]}]
                   (cond
                     (= action :Take)
                     (.tell hakker {:chopstick (.getSelf ctx) :taken? false})
@@ -30,9 +32,11 @@
                     (available)))))]
        (available)))))
 
-(defn hakker-behavior [name left right]
+(defn hakker-behavior [name
+                       ^akka.actor.typed.ActorRef left
+                       ^akka.actor.typed.ActorRef right]
   (behaviors/setup
-   (fn [ctx]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
      (letfn [(thinking []
                (behaviors/receive-message
                 (fn [{:keys [action]}]
@@ -48,7 +52,8 @@
                       (= chopstick left) (wait-for-other-chopstick right left)
                       (= chopstick right) (wait-for-other-chopstick left right))
                     (first-chopstick-denied)))))
-             (wait-for-other-chopstick [chopstick-to-wait-for taken-chopstick]
+             (wait-for-other-chopstick [chopstick-to-wait-for
+                                        ^akka.actor.typed.ActorRef taken-chopstick]
                (behaviors/receive-message
                 (fn [{:keys [chopstick taken?]}]
                   (when (= chopstick chopstick-to-wait-for)
@@ -68,7 +73,7 @@
                     (start-thinking (Duration/ofSeconds 5))))))
              (first-chopstick-denied []
                (behaviors/receive-message
-                (fn [{:keys [chopstick taken?]}]
+                (fn [{:keys [^akka.actor.typed.ActorRef chopstick taken?]}]
                   (if taken?
                     (do (.tell chopstick {:action :Put :hakker (.getSelf ctx)})
                         (start-thinking (Duration/ofMillis 10)))
@@ -87,7 +92,7 @@
 
 (def dining-behavior
   (behaviors/setup
-   (fn [ctx]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
      (let [hakker-names ["Ghosh" "Boner" "Klang" "Krasser" "Manie"]
            chopsticks (->> hakker-names
                            (map-indexed (fn [i _] (.spawn ctx chopstck-behavior (str "Chopstick" i))))
@@ -96,7 +101,7 @@
                          :let [left (get chopsticks i)
                                right (get chopsticks (mod (inc i) (count hakker-names)))]]
                      (.spawn ctx (hakker-behavior n left right) n))]
-       (doseq [hakker hakkers]
+       (doseq [^akka.actor.typed.ActorRef hakker hakkers]
          (.tell hakker {:action :Think}))))))
 
 (comment

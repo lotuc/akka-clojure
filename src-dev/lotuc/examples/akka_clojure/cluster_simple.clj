@@ -6,6 +6,8 @@
   (:import
    (akka.cluster ClusterEvent$MemberEvent ClusterEvent$ReachabilityEvent)))
 
+(set! *warn-on-reflection* true)
+
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; simple
 

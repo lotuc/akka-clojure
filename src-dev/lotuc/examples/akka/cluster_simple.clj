@@ -6,6 +6,8 @@
   (:import
    (akka.cluster ClusterEvent$MemberEvent ClusterEvent$ReachabilityEvent)))
 
+(set! *warn-on-reflection* true)
+
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; simple
 
@@ -14,7 +16,7 @@
 
 (defn cluster-listener []
   (behaviors/setup
-   (fn [ctx]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
      (let [self (.getSelf ctx)
            cluster (cluster/get-cluster (.getSystem ctx))]
        (doto (.subscriptions cluster)
@@ -25,7 +27,7 @@
 
 (def root-behavior
   (behaviors/setup
-   (fn [ctx]
+   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
      (.spawn ctx (cluster-listener) "ClusterListener")
      :empty)))
 

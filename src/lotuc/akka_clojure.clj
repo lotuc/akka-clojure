@@ -5,6 +5,8 @@
    [lotuc.akka.java-dsl :as dsl]
    [lotuc.akka.receptionist :as receptionist]))
 
+(set! *warn-on-reflection* true)
+
 ;;; Dyanmic bindings for message & signal handlers
 (def ^:dynamic *local-context* nil)
 
@@ -15,7 +17,7 @@
 
 (defn actor-context
   "Actor context of local context."
-  []
+  ^akka.actor.typed.javadsl.ActorContext []
   (or (:context (local-context))
       (throw (RuntimeException. "no actor context found in local context"))))
 
@@ -33,31 +35,31 @@
 
 (defn self
   "ActorRef for local context actor."
-  []
+  ^akka.actor.typed.ActorRef []
   (.getSelf (actor-context)))
 
 (defn system
   "ActorSystem of local context."
-  []
+  ^akka.actor.typed.ActorSystem []
   (.getSystem (actor-context)))
 
-(defn cluster []
+(defn cluster ^akka.cluster.typed.Cluster []
   (cluster/get-cluster (system)))
 
-(defn cluster-singleton []
+(defn cluster-singleton ^akka.cluster.typed.ClusterSingleton []
   (cluster/get-cluster-singleton (system)))
 
-(defn receptionist []
+(defn receptionist ^akka.actor.typed.ActorRef []
   (.receptionist (system)))
 
 (defn tell
   "Send message to target. Send to self if not target given"
-  ([target message] (.tell target message))
+  ([^akka.actor.typed.ActorRef target message] (.tell target message))
   ([message] (.tell (self) message)))
 
 (defn !
   "Same as tell."
-  ([target message] (.tell target message))
+  ([^akka.actor.typed.ActorRef target message] (.tell target message))
   ([message] (.tell (self) message)))
 
 (defn ask
@@ -72,7 +74,7 @@
          (reify akka.japi.function.Function2
            (apply [_ res throwable]
              (apply-to-response res throwable)))))
-  ([system msg timeout]
+  ([^akka.actor.typed.ActorSystem system msg timeout]
    (future (.get (dsl/ask system (fn [reply-to] (assoc msg :reply-to reply-to))
                           timeout (.scheduler system))))))
 
@@ -83,9 +85,9 @@
    (.scheduleOnce (actor-context) duration (self) message)))
 
 (defn spawn
-  ([behavior name]
+  (^akka.actor.typed.ActorRef [behavior name]
    (.spawn (actor-context) behavior name))
-  ([behavior]
+  (^akka.actor.typed.ActorRef [behavior]
    (.spawnAnonymous (actor-context) behavior)))
 
 (defn- bound-fn**

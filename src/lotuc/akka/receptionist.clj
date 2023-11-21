@@ -2,12 +2,14 @@
   (:import
    (akka.actor.typed.receptionist Receptionist ServiceKey)))
 
+(set! *warn-on-reflection* true)
+
 ;;; ServiceKey
 ;;; https://doc.akka.io/japi/akka/current/akka/actor/typed/receptionist/ServiceKey.html
 
 (defn create-service-key
-  ([clazz id] (ServiceKey/create clazz id))
-  ([id] (ServiceKey/create Object id)))
+  (^akka.actor.typed.receptionist.ServiceKey [clazz id] (ServiceKey/create clazz id))
+  (^akka.actor.typed.receptionist.ServiceKey [id] (ServiceKey/create Object id)))
 
 ;;; Receptionist
 ;;; https://doc.akka.io/japi/akka/current/akka/actor/typed/receptionist/Receptionist.html
