@@ -1,9 +1,10 @@
 (ns lotuc.akka-clojure
   (:require
-   [lotuc.akka.behaviors :as behaviors]
+   [lotuc.akka.common.log :refer [slf4j-log]]
+   [lotuc.akka.javadsl.actor.behaviors :as behaviors]
    [lotuc.akka.cluster :as cluster]
-   [lotuc.akka.java-dsl :as dsl]
-   [lotuc.akka.receptionist :as receptionist]))
+   [lotuc.akka.javadsl.actor :as javadsl.actor]
+   [lotuc.akka.actor.receptionist :as actor.receptionist]))
 
 (set! *warn-on-reflection* true)
 
@@ -75,8 +76,8 @@
            (apply [_ res throwable]
              (apply-to-response res throwable)))))
   ([^akka.actor.typed.ActorSystem system msg timeout]
-   (future (.get (dsl/ask system (fn [reply-to] (assoc msg :reply-to reply-to))
-                          timeout (.scheduler system))))))
+   (future (.get (javadsl.actor/ask system (fn [reply-to] (assoc msg :reply-to reply-to))
+                                    timeout (.scheduler system))))))
 
 (defn schedule-once
   ([target duration message]
@@ -156,12 +157,12 @@
 
 (defn cancel-timer
   ([]
-   (dsl/cancel-all-timer (timers)))
+   (javadsl.actor/cancel-all-timer (timers)))
   ([timer-key]
-   (dsl/cancel-timer (timers) timer-key)))
+   (javadsl.actor/cancel-timer (timers) timer-key)))
 
 (defn active-timer? [timer-key]
-  (dsl/active-timer? (timers) timer-key))
+  (javadsl.actor/active-timer? (timers) timer-key))
 
 (defn start-timer
   "Schedule a message to be sent.
@@ -182,7 +183,7 @@
   ```"
   [msg {:keys [timer-key timer-type interval initial-delay delay]
         :as opts}]
-  (dsl/start-timer (timers) msg opts))
+  (javadsl.actor/start-timer (timers) msg opts))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Cluster & receptionist
@@ -200,30 +201,26 @@
 
 (defn register-with-receptionist
   ([worker-service-key]
-   (.tell (receptionist) (receptionist/register worker-service-key (self))))
+   (.tell (receptionist) (actor.receptionist/register worker-service-key (self))))
   ([worker-service-key reply-to]
-   (.tell (receptionist) (receptionist/register worker-service-key reply-to))))
+   (.tell (receptionist) (actor.receptionist/register worker-service-key reply-to))))
 
 (defn subscribe-to-receptionist
   ([worker-service-key]
-   (.tell (receptionist) (receptionist/subscribe worker-service-key (self))))
+   (.tell (receptionist) (actor.receptionist/subscribe worker-service-key (self))))
   ([worker-service-key reply-to]
-   (.tell (receptionist) (receptionist/subscribe worker-service-key reply-to))))
+   (.tell (receptionist) (actor.receptionist/subscribe worker-service-key reply-to))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Log
 ;;; https://doc.akka.io/japi/akka/2.8/akka/actor/typed/javadsl/ActorContext.html#getLog()
 ;;; https://www.slf4j.org/api/org/slf4j/Logger.html
 
-(defmacro log* [n format-string & args]
-  (let [n (symbol (str "." (name n)))]
-    `(~n (.getLog (actor-context)) ~format-string (into-array Object [~@args]))))
-
-(defmacro trace [format-string & args] `(log* trace ~format-string ~@args))
-(defmacro debug [format-string & args] `(log* debug ~format-string ~@args))
-(defmacro info  [format-string & args] `(log* info ~format-string ~@args))
-(defmacro warn  [format-string & args] `(log* warn ~format-string ~@args))
-(defmacro error [format-string & args] `(log* error ~format-string ~@args))
+(defmacro trace [format-string & args] `(slf4j-log (.getLog (actor-context)) trace ~format-string ~@args))
+(defmacro debug [format-string & args] `(slf4j-log (.getLog (actor-context)) debug ~format-string ~@args))
+(defmacro info  [format-string & args] `(slf4j-log (.getLog (actor-context)) info ~format-string ~@args))
+(defmacro warn  [format-string & args] `(slf4j-log (.getLog (actor-context)) warn ~format-string ~@args))
+(defmacro error [format-string & args] `(slf4j-log (.getLog (actor-context)) error ~format-string ~@args))
 
 (comment
   (macroexpand '(info "hello {} and {}" "42" "lotuc")))

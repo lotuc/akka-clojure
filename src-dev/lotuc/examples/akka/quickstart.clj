@@ -1,6 +1,7 @@
 (ns lotuc.examples.akka.quickstart
   (:require
-   [lotuc.akka.behaviors :as behaviors]
+   [lotuc.akka.common.log :refer [slf4j-log]]
+   [lotuc.akka.javadsl.actor.behaviors :as behaviors]
    [lotuc.akka.system :refer [create-system]]))
 
 (set! *warn-on-reflection* true)
@@ -8,7 +9,7 @@
 ;;; https://developer.lightbend.com/guides/akka-quickstart-java/
 
 (defmacro info [ctx msg & args]
-  `(.info (.getLog ~ctx) ~msg (into-array Object [~@args])))
+  `(slf4j-log (.getLog ~ctx) info ~msg ~@args))
 
 (defn greeter-behavior []
   (behaviors/receive

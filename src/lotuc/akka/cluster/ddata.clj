@@ -1,4 +1,4 @@
-(ns lotuc.akka.ddata
+(ns lotuc.akka.cluster.ddata
   (:import
    (akka.cluster.ddata FlagKey Flag
                        PNCounterMapKey PNCounterMap
@@ -7,11 +7,11 @@
                        LWWMapKey LWWMap
                        LWWRegisterKey LWWRegister LWWRegister$Clock)))
 
-(set! *warn-on-reflection* true)
-
+;;; TODO: more to add
+;;; https://github.com/akka/akka/tree/v2.9.0/akka-distributed-data/src/main/scala/akka/cluster/ddata
 ;;; https://doc.akka.io/japi/akka/current/akka/cluster/ddata/ReplicatedData.html
 
-;;; TODO: more to add
+(set! *warn-on-reflection* true)
 
 (defmulti create-key (fn [dtype _k] dtype))
 (defmulti create-ddata (fn [d] (:dtype d)))

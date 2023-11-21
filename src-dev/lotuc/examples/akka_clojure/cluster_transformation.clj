@@ -2,7 +2,7 @@
   (:require
    [clojure.string :as s]
    [lotuc.akka-clojure :as a]
-   [lotuc.akka.receptionist :as receptionist]
+   [lotuc.akka.actor.receptionist :as actor.receptionist]
    [lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.actor.typed.receptionist Receptionist$Listing)
@@ -13,7 +13,7 @@
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; transformation
 
-(def worker-service-key (receptionist/create-service-key "Worker"))
+(def worker-service-key (actor.receptionist/create-service-key "Worker"))
 
 (a/setup frontend [] {:with-timer true}
   (let [!workers (atom []) !job-counter (atom 0)]

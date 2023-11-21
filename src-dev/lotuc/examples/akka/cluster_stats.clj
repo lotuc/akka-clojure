@@ -1,9 +1,10 @@
 (ns lotuc.examples.akka.cluster-stats
   (:require
    [clojure.string :as s]
-   [lotuc.akka.behaviors :as behaviors]
+   [lotuc.akka.actor.receptionist :as actor.receptionist]
    [lotuc.akka.cluster :as cluster]
-   [lotuc.akka.receptionist :as receptionist]
+   [lotuc.akka.common.log :refer [slf4j-log]]
+   [lotuc.akka.javadsl.actor.behaviors :as behaviors]
    [lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.actor.typed.javadsl Routers)
@@ -15,9 +16,9 @@
 ;;; stats
 
 (defmacro info [ctx msg & args]
-  `(.info (.getLog ~ctx) ~msg (into-array Object [~@args])))
+  `(slf4j-log (.getLog ~ctx) info ~msg ~@args))
 
-(def stats-service-key (receptionist/create-service-key "StatsService"))
+(def stats-service-key (actor.receptionist/create-service-key "StatsService"))
 
 (defn- stats-worker*
   [{:keys [^akka.actor.typed.javadsl.ActorContext context
@@ -124,7 +125,7 @@
                workers (.spawn ctx worker-pool-behavior "WorkerRouter")
                service (.spawn ctx (stats-service (.narrow workers)) "StatsService")]
            (.. ctx getSystem receptionist
-               (tell (receptionist/register stats-service-key (.narrow service))))
+               (tell (actor.receptionist/register stats-service-key (.narrow service))))
            :empty)
 
          (.hasRole self-member "client")
@@ -132,7 +133,7 @@
            (.spawn ctx (stats-service-client service-router) "Client")
            :empty))))))
 
-(def worker-service-key (receptionist/create-service-key Object "Worker"))
+(def worker-service-key (actor.receptionist/create-service-key Object "Worker"))
 
 ;;; corresponds to original example's AppOneMaster.java
 (defn root-behavior-one-master []
@@ -169,7 +170,7 @@
            (doseq [i (range 4)]
              (let [worker (.spawn ctx (stats-worker) (str "StatsWorker" i))]
                (.. ctx getSystem receptionist
-                   (tell (receptionist/register worker-service-key (.narrow worker))))))
+                   (tell (actor.receptionist/register worker-service-key (.narrow worker))))))
            :empty)
 
          (.hasRole self-member "client")

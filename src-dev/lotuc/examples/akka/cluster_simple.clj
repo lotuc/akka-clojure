@@ -1,7 +1,8 @@
 (ns lotuc.examples.akka.cluster-simple
   (:require
-   [lotuc.akka.behaviors :as behaviors]
    [lotuc.akka.cluster :as cluster]
+   [lotuc.akka.common.log :refer [slf4j-log]]
+   [lotuc.akka.javadsl.actor.behaviors :as behaviors]
    [lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.cluster ClusterEvent$MemberEvent ClusterEvent$ReachabilityEvent)))
@@ -12,7 +13,7 @@
 ;;; simple
 
 (defmacro info [ctx msg & args]
-  `(.info (.getLog ~ctx) ~msg (into-array Object [~@args])))
+  `(slf4j-log (.getLog ~ctx) info ~msg (into-array Object [~@args])))
 
 (defn cluster-listener []
   (behaviors/setup

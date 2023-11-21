@@ -3,7 +3,7 @@
    [clojure.string :as s]
    [lotuc.akka-clojure :as a]
    [lotuc.akka.cluster :as cluster]
-   [lotuc.akka.receptionist :as receptionist]
+   [lotuc.akka.actor.receptionist :as actor.receptionist]
    [lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.actor.typed.javadsl Routers)
@@ -14,7 +14,7 @@
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; stats
 
-(def stats-service-key (receptionist/create-service-key Object "StatsService"))
+(def stats-service-key (actor.receptionist/create-service-key Object "StatsService"))
 
 (a/setup stats-worker [] {:with-timer true}
   (a/info "Worker starting up")
@@ -108,7 +108,7 @@
             workers (a/spawn worker-pool-behavior "WorkerRouter")
             service (a/spawn (stats-service workers) "StatsService")]
         (.. system receptionist
-            (a/tell (receptionist/register stats-service-key service)))
+            (a/tell (actor.receptionist/register stats-service-key service)))
         :empty)
 
       (.hasRole self-member "client")
@@ -116,7 +116,7 @@
         (a/spawn (stats-service-client service-router) "Client")
         :empty))))
 
-(def worker-service-key (receptionist/create-service-key "Worker"))
+(def worker-service-key (actor.receptionist/create-service-key "Worker"))
 
 (a/setup routed-stat-service []
   (let [worker-group-behavior
@@ -150,7 +150,7 @@
         (doseq [i (range 4)]
           (let [worker (a/spawn (stats-worker) (str "StatsWorker" i))]
             (.. system receptionist
-                (a/tell (receptionist/register worker-service-key (.narrow worker))))))
+                (a/tell (actor.receptionist/register worker-service-key (.narrow worker))))))
         :empty)
 
       (.hasRole self-member "client")

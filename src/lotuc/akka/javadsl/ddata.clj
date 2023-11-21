@@ -1,6 +1,8 @@
-(ns lotuc.akka.ddata-java-dsl
+(ns lotuc.akka.javadsl.ddata
   (:import
    (akka.cluster.ddata.typed.javadsl DistributedData)))
+
+;;; https://github.com/akka/akka/tree/v2.9.0/akka-cluster-typed/src/main/scala/akka/cluster/ddata/typed/javadsl
 
 (set! *warn-on-reflection* true)
 

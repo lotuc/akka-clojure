@@ -1,6 +1,7 @@
 (ns lotuc.examples.akka.fsm
   (:require
-   [lotuc.akka.behaviors :as behaviors]
+   [lotuc.akka.common.log :refer [slf4j-log]]
+   [lotuc.akka.javadsl.actor.behaviors :as behaviors]
    [lotuc.akka.system :refer [create-system]])
   (:import
    (java.time Duration)))
@@ -10,7 +11,7 @@
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-fsm-java
 
 (defmacro info [ctx msg & args]
-  `(.info (.getLog ~ctx) ~msg (into-array [~@args])))
+  `(slf4j-log (.getLog ~ctx) info ~msg (into-array [~@args])))
 
 (def chopstck-behavior
   (behaviors/setup

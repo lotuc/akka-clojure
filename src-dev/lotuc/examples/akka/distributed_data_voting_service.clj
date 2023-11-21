@@ -1,9 +1,10 @@
 (ns lotuc.examples.akka.distributed-data-voting-service
   (:require
-   [lotuc.akka.behaviors :as behaviors]
-   [lotuc.akka.ddata :as ddata]
-   [lotuc.akka.java-dsl :as java-dsl]
-   [lotuc.akka.ddata-java-dsl :as ddata-java-dsl]
+   [lotuc.akka.cluster.ddata :as cluster.ddata]
+   [lotuc.akka.common.log :refer [slf4j-log]]
+   [lotuc.akka.javadsl.actor :as javadsl.actor]
+   [lotuc.akka.javadsl.actor.behaviors :as behaviors]
+   [lotuc.akka.javadsl.ddata :as javadsl.ddata]
    [lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (java.time Duration)))
@@ -13,24 +14,24 @@
 
 (set! *warn-on-reflection* true)
 
-(def opened-key (ddata/create-key :Flag "contest-opened"))
-(def closed-key (ddata/create-key :Flag "contest-closed"))
-(def counters-key (ddata/create-key :PNCounterMap "contest-counters"))
+(def opened-key (cluster.ddata/create-key :Flag "contest-opened"))
+(def closed-key (cluster.ddata/create-key :Flag "contest-closed"))
+(def counters-key (cluster.ddata/create-key :PNCounterMap "contest-counters"))
 
 ;;; https://doc.akka.io/japi/akka/current/akka/cluster/ddata/typed/javadsl/Replicator.html
-(def write-all (ddata-java-dsl/clj->data {:dtype :ReplicatorWriteAll :timeout (Duration/ofSeconds 5)}))
-(def read-all (ddata-java-dsl/clj->data {:dtype :ReplicatorReadAll :timeout (Duration/ofSeconds 3)}))
-(defn write-local [] (ddata-java-dsl/clj->data {:dtype :ReplicatorWriteLocal$}))
+(def write-all (javadsl.ddata/clj->data {:dtype :ReplicatorWriteAll :timeout (Duration/ofSeconds 5)}))
+(def read-all (javadsl.ddata/clj->data {:dtype :ReplicatorReadAll :timeout (Duration/ofSeconds 3)}))
+(defn write-local [] (javadsl.ddata/clj->data {:dtype :ReplicatorWriteLocal$}))
 
 (defn tell [^akka.actor.typed.ActorRef target msg]
   (.tell target msg))
 
 (defn response-adapter
-  ([typ] (comp #(assoc % :action typ) ddata-java-dsl/->clj))
-  ([typ m] (comp #(merge (assoc % :action typ) m) ddata-java-dsl/->clj)))
+  ([typ] (comp #(assoc % :action typ) javadsl.ddata/->clj))
+  ([typ m] (comp #(merge (assoc % :action typ) m) javadsl.ddata/->clj)))
 
 (defmacro info [ctx msg & args]
-  `(.info (.getLog ~ctx) ~msg (into-array Object [~@args])))
+  `(slf4j-log (.getLog ~ctx) info ~msg ~@args))
 
 (defn voting-service* [^akka.actor.typed.javadsl.ActorContext ctx
                        ^akka.cluster.ddata.SelfUniqueAddress node
@@ -38,14 +39,14 @@
                        replicator-counters]
   (letfn [(receive-open []
             (info ctx "receive-open")
-            (ddata-java-dsl/ask-update replicator-flag
-                                       (fn [reply-to]
-                                         {:dtype :ReplicatorUpdate :dkey opened-key
-                                          :initial (ddata/create-ddata {:dtype :Flag})
-                                          :consistency write-all
-                                          :reply-to reply-to
-                                          :modify (fn [^akka.cluster.ddata.Flag v] (.switchOn v))})
-                                       (response-adapter :UpdateResponse))
+            (javadsl.ddata/ask-update replicator-flag
+                                      (fn [reply-to]
+                                        {:dtype :ReplicatorUpdate :dkey opened-key
+                                         :initial (cluster.ddata/create-ddata {:dtype :Flag})
+                                         :consistency write-all
+                                         :reply-to reply-to
+                                         :modify (fn [^akka.cluster.ddata.Flag v] (.switchOn v))})
+                                      (response-adapter :UpdateResponse))
             (become-open))
 
           (on-subscribe-response [{:keys [dtype dkey data] :as m}]
@@ -78,38 +79,38 @@
 
           (receive-get-votes [{:keys [reply-to]}]
             (info ctx "receive-get-votes")
-            (ddata-java-dsl/ask-get replicator-counters
-                                    (fn [reply-to]
-                                      {:dtype :ReplicatorGet
-                                       :dkey counters-key
-                                       :consistency read-all
-                                       :reply-to reply-to})
-                                    (response-adapter :GetResponse {:reply-to reply-to}))
+            (javadsl.ddata/ask-get replicator-counters
+                                   (fn [reply-to]
+                                     {:dtype :ReplicatorGet
+                                      :dkey counters-key
+                                      :consistency read-all
+                                      :reply-to reply-to})
+                                   (response-adapter :GetResponse {:reply-to reply-to}))
             :same)
 
           (receive-vote [{:keys [participant]}]
             (info ctx "receive-vote: {}" participant)
-            (ddata-java-dsl/ask-update replicator-counters
-                                       (fn [reply-to]
-                                         {:dtype :ReplicatorUpdate :dkey counters-key
-                                          :initial (ddata/create-ddata {:dtype :PNCounterMap})
-                                          :consistency (write-local)
-                                          :reply-to reply-to
-                                          :modify (fn [^akka.cluster.ddata.PNCounterMap v]
-                                                    (.increment v node participant 1))})
-                                       (response-adapter :UpdateResponse))
+            (javadsl.ddata/ask-update replicator-counters
+                                      (fn [reply-to]
+                                        {:dtype :ReplicatorUpdate :dkey counters-key
+                                         :initial (cluster.ddata/create-ddata {:dtype :PNCounterMap})
+                                         :consistency (write-local)
+                                         :reply-to reply-to
+                                         :modify (fn [^akka.cluster.ddata.PNCounterMap v]
+                                                   (.increment v node participant 1))})
+                                      (response-adapter :UpdateResponse))
             :same)
 
           (receive-close []
             (info ctx "receive-close")
-            (ddata-java-dsl/ask-update replicator-flag
-                                       (fn [reply-to]
-                                         {:dtype :ReplicatorUpdate :dkey closed-key
-                                          :initial (ddata/create-ddata {:dtype :Flag})
-                                          :consistency write-all
-                                          :reply-to reply-to
-                                          :modify (fn [^akka.cluster.ddata.Flag v] (.switchOn v))})
-                                       (response-adapter :UpdateResponse))
+            (javadsl.ddata/ask-update replicator-flag
+                                      (fn [reply-to]
+                                        {:dtype :ReplicatorUpdate :dkey closed-key
+                                         :initial (cluster.ddata/create-ddata {:dtype :Flag})
+                                         :consistency write-all
+                                         :reply-to reply-to
+                                         :modify (fn [^akka.cluster.ddata.Flag v] (.switchOn v))})
+                                      (response-adapter :UpdateResponse))
             (behaviors/setup (partial match-get-votes-impl false)))
 
           (match-open [handle-message]
@@ -131,11 +132,11 @@
 
           (become-open []
             (doto replicator-flag
-              (ddata-java-dsl/unsubscribe opened-key)
-              (ddata-java-dsl/subscribe closed-key (response-adapter :SubscribeResponse)))
+              (javadsl.ddata/unsubscribe opened-key)
+              (javadsl.ddata/subscribe closed-key (response-adapter :SubscribeResponse)))
             (match-open (partial match-get-votes-impl true)))]
 
-    (ddata-java-dsl/subscribe
+    (javadsl.ddata/subscribe
      replicator-flag opened-key
      (response-adapter :SubscribeResponse))
 
@@ -150,11 +151,11 @@
 (defn voting-service []
   (behaviors/setup
    (fn [^akka.actor.typed.javadsl.ActorContext ctx]
-     (ddata-java-dsl/with-replicator-message-adaptor
+     (javadsl.ddata/with-replicator-message-adaptor
        (fn [replicator-flag]
-         (ddata-java-dsl/with-replicator-message-adaptor
+         (javadsl.ddata/with-replicator-message-adaptor
            (fn [replicator-counters]
-             (let [node (.selfUniqueAddress (ddata-java-dsl/get-distributed-data
+             (let [node (.selfUniqueAddress (javadsl.ddata/get-distributed-data
                                              (.. ctx getSystem)))]
                (voting-service* ctx node replicator-flag replicator-counters)))))))))
 
@@ -166,7 +167,7 @@
    {"akka.remote.artery.canonical.port" port}))
 
 (defn get-votes [^akka.actor.typed.ActorSystem system]
-  (-> (java-dsl/ask
+  (-> (javadsl.actor/ask
        system
        (fn [reply-to] {:action :GetVotes :reply-to reply-to})
        (Duration/ofSeconds 5)

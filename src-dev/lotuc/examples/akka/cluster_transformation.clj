@@ -1,9 +1,10 @@
 (ns lotuc.examples.akka.cluster-transformation
   (:require
    [clojure.string :as s]
-   [lotuc.akka.behaviors :as behaviors]
+   [lotuc.akka.actor.receptionist :as actor.receptionist]
    [lotuc.akka.cluster :as cluster]
-   [lotuc.akka.receptionist :as receptionist]
+   [lotuc.akka.common.log :refer [slf4j-log]]
+   [lotuc.akka.javadsl.actor.behaviors :as behaviors]
    [lotuc.akka.system :refer [create-system-from-config]])
   (:import
    (akka.actor.typed.receptionist Receptionist$Listing)
@@ -15,12 +16,12 @@
 ;;; transformation
 
 (defmacro info [ctx msg & args]
-  `(.info (.getLog ~ctx) ~msg (into-array Object [~@args])))
+  `(slf4j-log (.getLog ~ctx) info ~msg ~@args))
 
 (defmacro warn [ctx msg & args]
-  `(.warn (.getLog ~ctx) ~msg (into-array Object [~@args])))
+  `(slf4j-log (.getLog ~ctx) warn ~msg ~@args))
 
-(def worker-service-key (receptionist/create-service-key "Worker"))
+(def worker-service-key (actor.receptionist/create-service-key "Worker"))
 
 (defn frontend*
   [!workers !job-counter
@@ -28,7 +29,7 @@
            ^akka.actor.typed.javadsl.ActorContext context]
     :as i}]
   (.. context getSystem receptionist
-      (tell (receptionist/subscribe worker-service-key (.getSelf context))))
+      (tell (actor.receptionist/subscribe worker-service-key (.getSelf context))))
   (.. timers
       (startTimerWithFixedDelay :Tick :Tick (Duration/ofSeconds 2)))
   (behaviors/receive-message
@@ -88,7 +89,7 @@
    (fn [^akka.actor.typed.javadsl.ActorContext ctx]
      (info ctx "Registering myself with receptionist")
      (.. ctx getSystem receptionist
-         (tell (receptionist/register worker-service-key (.narrow (.getSelf ctx)))))
+         (tell (actor.receptionist/register worker-service-key (.narrow (.getSelf ctx)))))
      (behaviors/receive-message
       (fn [{:keys [action text ^akka.actor.typed.ActorRef reply-to] :as m}]
         (.tell reply-to {:action :TextTransformed :text (s/upper-case text)}))))))

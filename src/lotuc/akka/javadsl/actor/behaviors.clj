@@ -1,10 +1,12 @@
-(ns lotuc.akka.behaviors
+(ns lotuc.akka.javadsl.actor.behaviors
   (:require
    [clojure.string :as s])
   (:import
-   (akka.actor.typed Behavior LogOptions)
+   (akka.actor.typed LogOptions)
    (akka.actor.typed.javadsl Behaviors)
    (org.slf4j.event Level)))
+
+;;; https://github.com/akka/akka/tree/v2.6.0/akka-actor-typed/src/main/scala/akka/actor/typed/javadsl
 
 (set! *warn-on-reflection* true)
 
@@ -138,7 +140,7 @@
       :mdc-for-message (fn [a-message] {\"key1\" \"value1\"})})
   ```
   "
-  ([^Behavior behavior
+  ([^akka.actor.typed.Behavior behavior
     ^Class intercept-message-class
     {:keys [^java.util.Map static-mdc mdc-for-message]}]
    (cond
@@ -160,7 +162,7 @@
 
      :else
      behavior))
-  ([^Behavior behavior
+  ([^akka.actor.typed.Behavior behavior
     {:keys [static-mdc mdc-for-message] :as mdc}]
    (with-mdc behavior Object mdc)))
 
@@ -208,7 +210,7 @@
                  :stopped (Behaviors/stopped)
                  :empty   (Behaviors/empty)
                  :ignore  (Behaviors/ignore)}))
-        (when (instance? Behavior v) v)
+        (when (instance? akka.actor.typed.Behavior v) v)
         (throw (ex-info (str "invalid behavior: " (class v)) {:value v})))))
 
 (defn- ->LogLevel [level]

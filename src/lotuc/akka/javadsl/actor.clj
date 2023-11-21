@@ -1,6 +1,8 @@
-(ns lotuc.akka.java-dsl
+(ns lotuc.akka.javadsl.actor
   (:import
-   [akka.actor.typed.javadsl AskPattern]))
+   (akka.actor.typed.javadsl AskPattern)))
+
+;;; https://github.com/akka/akka/tree/v2.9.0/akka-actor-typed/src/main/scala/akka/actor/typed/javadsl
 
 (set! *warn-on-reflection* true)
 
