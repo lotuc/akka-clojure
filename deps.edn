@@ -3,6 +3,7 @@
  :deps {com.typesafe.akka/akka-actor-typed_2.13 {:mvn/version "2.9.0"}
         com.typesafe.akka/akka-cluster-typed_2.13 {:mvn/version "2.9.0"}
         com.typesafe.akka/akka-cluster-sharding-typed_2.13 {:mvn/version "2.9.0"}
+        com.typesafe.akka/akka-persistence-typed_2.13 {:mvn/version "2.9.0"}
         com.taoensso/nippy {:mvn/version "3.3.0"}}
  :aliases
  {:build {:deps {io.github.seancorfield/build-clj {:git/tag "v0.6.4" :git/sha "c21cfde"}}
@@ -13,4 +14,5 @@
   :dev {:extra-paths ["src-dev" "target/build/src-java/classes"]
         :extra-deps {org.clojure/tools.namespace {:mvn/version "1.4.4"}
                      com.lambdaisland/classpath {:mvn/version "0.4.44"}
-                     ch.qos.logback/logback-classic {:mvn/version "1.2.11"}}}}}
+                     ch.qos.logback/logback-classic {:mvn/version "1.2.11"}
+                     org.fusesource.leveldbjni/leveldbjni-all {:mvn/version "1.8"}}}}}
