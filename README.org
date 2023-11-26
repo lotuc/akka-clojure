@@ -1,0 +1,29 @@
+* akka-clojure
+
+Thin wrappers for raw Akka APIs are placed under [[./src/lotuc/akka][lotuc.akka]].
+And more customized version of wrappers are placed under
+[[./src/lotuc/akka_clojure.clj][lotuc.akka-clojure]].
+
+** Use cases
+
+Examples & use cases are now placed under [[./src-dev/lotuc/examples][src-dev/lotuc/examples]]. The
+examples are divided into two groups, [[./src-dev/lotuc/examples/akka][lotuc.examples.akka]] uses the
+[[./src/lotuc/akka][lotuc.akka]] APIs and [[./src-dev/lotuc/examples/akka_clojure][lotuc.examples.akka-clojure]] uses the
+[[./src/lotuc/akka_clojure.clj][lotuc.akka-clojure]] APIs.
+
+Examples:
+
+| Topic            | Title                              | lotuc.akka         | lotuc.akka-clojure         |
+|------------------+------------------------------------+--------------------+----------------------------|
+|                  | Quick Start                        | [[./src-dev/lotuc/examples/akka/quickstart.clj][lotuc.akka version]] | [[./src-dev/lotuc/examples/akka_clojure/quickstart.clj][lotuc.akka-clojure version]] |
+|                  | Dining Hakkers                     | [[./src-dev/lotuc/examples/akka/fsm.clj][lotuc.akka version]] | [[./src-dev/lotuc/examples/akka_clojure/fsm.clj][lotuc.akka-clojure version]] |
+| Cluster          | Simple                             | [[./src-dev/lotuc/examples/akka/cluster_simple.clj][lotuc.akka version]] | [[./src-dev/lotuc/examples/akka_clojure/cluster_simple.clj][lotuc.akka-clojure version]] |
+| Cluster          | Worker registration example        | [[./src-dev/lotuc/examples/akka/cluster_transformation.clj][lotuc.akka version]] | [[./src-dev/lotuc/examples/akka_clojure/cluster_transformation.clj][lotuc.akka-clojure version]] |
+| Cluster          | Group of routes                    | [[./src-dev/lotuc/examples/akka/cluster_stats.clj][lotuc.akka version]] | [[./src-dev/lotuc/examples/akka_clojure/cluster_stats.clj][lotuc.akka-clojure version]] |
+| Cluster Sharding | KillrWeather                       | [[./src-dev/lotuc/examples/akka/cluster_sharding_killrweather.clj][lotuc.akka version]] |                            |
+| Distributed Data | Low Latency Voting Service         | [[./src-dev/lotuc/examples/akka/distributed_data_voting_service.clj][lotuc.akka version]] |                            |
+| Distributed Data | Highly Available Shopping Cart     | [[./src-dev/lotuc/examples/akka/distributed_data_shopping_cart.clj][lotuc.akka version]] |                            |
+| Distributed Data | Replicated Cache                   | [[./src-dev/lotuc/examples/akka/distributed_data_replicated_cache.clj][lotuc.akka version]] |                            |
+| Distributed Data | Replicated Metrics                 | [[./src-dev/lotuc/examples/akka/distributed_data_replicated_metrics.clj][lotuc.akka version]] |                            |
+| Persistence      | Shopping Cart                      | [[./src-dev/lotuc/examples/akka/persistence_shopping_cart.clj][lotuc.akka version]] |                            |
+| Persistence      | Replicated Event Sourcing Multi DC | [[./src-dev/lotuc/examples/akka/persistence_multi_dc.clj][lotuc.akka version]] |                            |
