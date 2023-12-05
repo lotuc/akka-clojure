@@ -3,20 +3,22 @@
    [lotuc.akka.actor.scaladsl :as dsl]
    [lotuc.akka.actor.typed.actor-ref :as actor-ref]
    [lotuc.akka.actor.typed.actor-system :as actor-system]
+   [lotuc.akka.actor.typed.event-stream :as event-stream]
    [lotuc.akka.cluster.ddata.lww-map :as ddata.lww-map]
    [lotuc.akka.cluster.ddata.scaladsl :as ddata-dsl]
    [lotuc.akka.cluster.member :as cluster.member]
    [lotuc.akka.cluster.scaladsl :as cluster-dsl]
+   [lotuc.akka.cluster.cluster-event]
    [lotuc.akka.cluster.typed.cluster :as cluster]
    [lotuc.akka.cnv :as cnv]
    [lotuc.akka.common.slf4j :refer [slf4j-log]])
   (:import
-   (akka.actor.typed.eventstream EventStream$Publish)
-   (akka.actor.typed.eventstream EventStream$Subscribe)
-   (java.lang.management ManagementFactory)))
+   (java.lang.management ManagementFactory MemoryMXBean)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-distributed-data-java
 ;;; Replicated Metrics
+
+(set! *warn-on-reflection* true)
 
 (def used-heap-key {:dtype :ddata-key :ddata-type :lww-map :key-id "used-heap"})
 (def max-heap-key  {:dtype :ddata-key :ddata-type :lww-map :key-id "max-heap"})
@@ -25,16 +27,15 @@
   ([action]   (comp #(assoc % :action action) cnv/->clj))
   ([action m] (comp #(merge (assoc % :action action) m) cnv/->clj)))
 
-(defn- node-key [address]
+(defn- node-key [^akka.actor.Address address]
   (format "%s:%s" (.. address host get) (.. address port get)))
 
 (defmacro info [ctx msg & args]
   `(slf4j-log (dsl/log ~ctx) info ~msg ~@args))
 
 (defn replicated-metrics*
-  [{:keys [context replicator node cluster event-stream
-           self-node-key
-           memory-m-bean
+  [{:keys [context replicator node cluster event-stream self-node-key
+           ^MemoryMXBean memory-m-bean
            !max-heap !nodes-in-cluster]}]
   (letfn [(receive-tick []
             (let [heap (.getHeapMemoryUsage memory-m-bean)
@@ -66,7 +67,7 @@
                                     (loop [result data
                                            [k & ks] (keys (ddata.lww-map/get-entries data))]
                                       (if k
-                                        (do (when-not (ddata.lww-map/contains? nodes-at-cleanup k)
+                                        (do (when-not (contains? nodes-at-cleanup k)
                                               (ddata.lww-map/remove result node k))
                                             (recur result ks))
                                         result)))]
@@ -102,18 +103,18 @@
                              (assoc percent-per-node k (/ (* 100.0 v) m))
                              percent-per-node)
                            entries)
-                    (actor-ref/tell
-                     event-stream
-                     (EventStream$Publish. {:action :UsedHeap
-                                            :percent-per-node percent-per-node}))))))
+                    (->> {:action :UsedHeap
+                          :percent-per-node percent-per-node}
+                         (event-stream/publish-command)
+                         (actor-ref/tell event-stream))))))
             :same)
           (receive-member-up [{:keys [member]}]
             (swap! !nodes-in-cluster conj (node-key (cluster.member/address member)))
             :same)
           (receive-member-removed [{:keys [member]}]
-            (let [addr (cluster.member/address member)]
-              (swap! !nodes-in-cluster disj (node-key addr))
-              (if (= addr (.. cluster selfMember uniqueAddress address))
+            (let [member-node-key (node-key (cluster.member/address member))]
+              (swap! !nodes-in-cluster disj member-node-key)
+              (if (= member-node-key self-node-key)
                 :stopped
                 :same)))]
 
@@ -122,12 +123,10 @@
        (case (if (keyword? m) m action)
          :Tick (receive-tick)
          :Cleanup (receive-cleanup)
-
          :SubscribeResponse (on-subscribe-response m)
          :UpdateResponse :same
-
-         (when (= dtype :cluster-event)
-           (case (:ev-type m)
+         (let [{:keys [ev-type] :as m} (cnv/->clj m)]
+           (case ev-type
              :member-up (receive-member-up m)
              :member-removed (receive-member-removed m))))
        :same))))
@@ -161,15 +160,17 @@
                    self-node-key (node-key (.. cluster selfMember address))
                    watcher (dsl/spawn context (watcher-behavior) "watcher")
                    event-stream (actor-system/event-stream system)]
+
                (doto replicator
                  (cluster-dsl/subscribe-ddata used-heap-key (response-adapter :SubscribeResponse))
                  (cluster-dsl/subscribe-ddata max-heap-key (response-adapter :SubscribeResponse)))
+
                (doto (cluster/subscriptions cluster)
                  (actor-ref/tell (cluster/create-subscribe self :member-removed))
                  (actor-ref/tell (cluster/create-subscribe self :member-up)))
 
                (info context "start watching event stream")
-               (actor-ref/tell event-stream (EventStream$Subscribe. Object watcher))
+               (actor-ref/tell event-stream (event-stream/subscribe-command watcher))
 
                (replicated-metrics* {:context context
                                      :replicator replicator
