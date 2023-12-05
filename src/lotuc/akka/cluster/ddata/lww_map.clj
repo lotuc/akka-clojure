@@ -5,7 +5,6 @@
    [lotuc.akka.cluster.ddata.replicated-data :as ddata.replicated-data]
    [lotuc.akka.cnv :as cnv])
   (:import
-   (akka.cluster UniqueAddress)
    (akka.cluster.ddata LWWMap LWWMapKey LWWRegister$Clock
                        SelfUniqueAddress)))
 
