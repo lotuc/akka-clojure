@@ -1,12 +1,14 @@
 (ns lotuc.examples.akka.distributed-data-replicated-cache
   (:require
-   [lotuc.akka.javadsl.actor.behaviors :as behaviors]
-   [lotuc.akka.cluster.ddata :as cluster.ddata]
-   [lotuc.akka.javadsl.ddata :as javadsl.ddata]
-   [lotuc.akka.javadsl.actor :as javadsl.actor]
-   [lotuc.akka.system :refer [create-system-from-config]])
-  (:import
-   (java.time Duration)))
+   [lotuc.akka.actor.scaladsl :as dsl]
+   [lotuc.akka.actor.typed.actor-ref :as actor-ref]
+   [lotuc.akka.actor.typed.actor-system :as actor-system]
+   [lotuc.akka.actor.typed.scaladsl.ask-pattern :as scaladsl.ask-pattern]
+   [lotuc.akka.cluster.ddata.lww-map :as ddata.lww-map]
+   [lotuc.akka.cluster.ddata.scaladsl :as ddata-dsl]
+   [lotuc.akka.cluster.scaladsl :as cluster-dsl]
+   [lotuc.akka.cnv :as cnv]
+   [lotuc.akka.common.slf4j :refer [slf4j-log]]))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-distributed-data-java
 ;;; Replicated Cache
@@ -14,57 +16,62 @@
 (set! *warn-on-reflection* true)
 
 (defn response-adapter
-  ([typ] (comp #(assoc % :action typ) javadsl.ddata/->clj))
-  ([typ m] (comp #(merge (assoc % :action typ) m) javadsl.ddata/->clj)))
+  ([typ] (comp #(assoc % :action typ) cnv/->clj))
+  ([typ m] (comp #(merge (assoc % :action typ) m) cnv/->clj)))
 
-(defn- tell [^akka.actor.typed.ActorRef target msg]
-  (.tell target msg))
+(defmacro info [ctx msg & args]
+  `(slf4j-log (dsl/log ~ctx) info ~msg ~@args))
 
-(defn- replicated-cache* [^akka.cluster.ddata.SelfUniqueAddress node
-                          replicator]
-  (letfn [(data-key [k] (cluster.ddata/create-key :LWWMap (str "cache-" (mod (abs (hash k)) 100))))
-          (receive-put-in-cache [{:keys [key value]}]
-            (javadsl.ddata/ask-update replicator
-                                      (fn [reply-to]
-                                        {:dtype :ReplicatorUpdate :dkey (data-key key)
-                                         :initial (cluster.ddata/create-ddata {:dtype :LWWMap})
-                                         :consistency (javadsl.ddata/clj->data {:dtype :ReplicatorWriteLocal$})
-                                         :reply-to reply-to
-                                         :modify (fn [^akka.cluster.ddata.LWWMap v] (.put v node key value))})
-                                      (response-adapter :UpdateResponse))
+(defn- replicated-cache* [ctx node replicator]
+  (letfn [(data-key [k]
+            {:dtype :ddata-key :ddata-type :lww-map
+             :key-id (str "cache-" (mod (abs (hash k)) 100))})
+          (receive-put-in-cache [{:keys [k v]}]
+            (info ctx "put in cache: {} -> {}" k v)
+            (cluster-dsl/ask-update
+             replicator
+             (fn [reply-to]
+               {:dkey (data-key k)
+                :initial {:dtype :ddata :ddata-type :lww-map}
+                :consistency {:dtype :replicator-consistency :w :local}
+                :reply-to reply-to
+                :modify #(ddata.lww-map/put % node k v)})
+             (response-adapter :UpdateResponse))
             :same)
-          (receive-evict [{:keys [key]}]
-            (javadsl.ddata/ask-update replicator
-                                      (fn [reply-to]
-                                        {:dtype :ReplicatorUpdate :dkey (data-key key)
-                                         :initial (cluster.ddata/create-ddata {:dtype :LWWMap})
-                                         :consistency (javadsl.ddata/clj->data {:dtype :ReplicatorWriteLocal$})
-                                         :reply-to reply-to
-                                         :modify (fn [^akka.cluster.ddata.LWWMap v] (.remove v node key))})
-                                      (response-adapter :UpdateResponse))
+          (receive-evict [{:keys [k]}]
+            (info ctx "evict: {}" k)
+            (cluster-dsl/ask-update
+             replicator
+             (fn [reply-to]
+               {:dkey (data-key k)
+                :initial {:dtype :ddata :ddata-type :lww-map}
+                :consistency {:dtype :replicator-consistency :w :local}
+                :reply-to reply-to
+                :modify #(ddata.lww-map/remove % node k)})
+             (response-adapter :UpdateResponse))
             :same)
-          (receive-get-from-cache [{:keys [key reply-to]}]
-            (javadsl.ddata/ask-get replicator
-                                   (fn [reply-to]
-                                     {:dtype :ReplicatorGet :dkey (data-key key)
-                                      :consistency (javadsl.ddata/clj->data {:dtype :ReplicatorReadLocal$})
-                                      :reply-to reply-to})
-                                   (response-adapter :GetResponse {:reply-to reply-to :key key}))
+          (receive-get-from-cache [{:keys [k reply-to]}]
+            (cluster-dsl/ask-get
+             replicator
+             (fn [reply-to]
+               {:dkey (data-key k)
+                :consistency {:dtype :replicator-consistency :r :local}
+                :reply-to reply-to})
+             (response-adapter :GetResponse {:reply-to reply-to :k k}))
             :same)
-          (on-get-response [{:keys [dtype key ^akka.cluster.ddata.LWWMap data reply-to]}]
-            (some->> (case dtype
-                       :ReplicatorGetSuccess
-                       (let [r (.get data key)]
-                         {:action :Cached
-                          :key key
-                          :value (if (.isDefined r) [:ok (.get r)] [:empty])})
-
-                       :ReplicatorNotFound
-                       [:empty])
-                     (tell reply-to))
+          (on-get-response [{:keys [response-type k data reply-to] :as m}]
+            (case response-type
+              :success
+              (actor-ref/tell reply-to
+                              {:action :Cached
+                               :k k :v (ddata.lww-map/get data k)})
+              :not-found
+              (actor-ref/tell reply-to
+                              {:k k :v nil}))
             :same)]
-    (behaviors/receive-message
+    (dsl/receive-message
      (fn [{:keys [action] :as m}]
+       (info ctx "guardian recv: {}" m)
        (case action
          :PutInCache (receive-put-in-cache m)
          :Evict (receive-evict m)
@@ -75,48 +82,50 @@
          :same)))))
 
 (defn replicated-cache []
-  (behaviors/setup
-   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
-     (javadsl.ddata/with-replicator-message-adaptor
+  (dsl/setup
+   (fn [ctx]
+     (ddata-dsl/with-replicator-message-adapter
        (fn [replicator]
-         (let [node (.selfUniqueAddress (javadsl.ddata/get-distributed-data
-                                         (.. ctx getSystem)))]
-           (replicated-cache* node replicator)))))))
+         (let [system (dsl/system ctx)
+               node (.selfUniqueAddress (cluster-dsl/get-distributed-data system))]
+           (replicated-cache* ctx node replicator)))))))
 
 (defn startup [port]
-  (create-system-from-config
+  (actor-system/create-system-from-config
    (replicated-cache)
    "ClusterSystem"
    "cluster-application"
    {"akka.remote.artery.canonical.port" port}))
 
 (defn- ask* [^akka.actor.typed.ActorSystem system msg]
-  (-> (javadsl.actor/ask system
-                         (fn [reply-to] (assoc msg :reply-to reply-to))
-                         (Duration/ofSeconds 5)
-                         (.scheduler system))
-      (.get)))
+  (scaladsl.ask-pattern/ask
+   system
+   (fn [reply-to] (assoc msg :reply-to reply-to))
+   "5.sec"
+   (actor-system/scheduler system)))
 
-(defn put-in-cache [^akka.actor.typed.ActorSystem system {:keys [key value]}]
-  (.tell system {:action :PutInCache :key key :value value}))
+(defn put-in-cache [^akka.actor.typed.ActorSystem system {:keys [k v]}]
+  (actor-ref/tell system {:action :PutInCache :k k :v v}))
 
-(defn evict [^akka.actor.typed.ActorSystem system {:keys [key]}]
-  (.tell system {:action :Evict :key key}))
+(defn evict [^akka.actor.typed.ActorSystem system {:keys [k]}]
+  (actor-ref/tell system {:action :Evict :k k}))
 
-(defn get-from-cache [^akka.actor.typed.ActorSystem system {:keys [key]}]
-  (ask* system {:action :GetFromCache :key key}))
+(defn get-from-cache [^akka.actor.typed.ActorSystem system {:keys [k]}]
+  (ask* system {:action :GetFromCache :k k}))
 
 (comment
   (do (def s0 (startup 25251))
       (def s1 (startup 25252)))
 
-  (put-in-cache s0 {:key "hello" :value "world"})
-  (evict s1 {:key "hello"})
+  (put-in-cache s0 {:k "hello" :v "world"})
+  (put-in-cache s0 {:k "lotuc" :v "42"})
+  (evict s1 {:k "hello"})
 
-  (get-from-cache s0 {:key "hello"})
-  (get-from-cache s1 {:key "hello"})
+  @(get-from-cache s0 {:k "hello"})
+  @(get-from-cache s1 {:k "hello"})
 
-  (get-from-cache s1 {:key "42"})
+  @(get-from-cache s1 {:k "lotuc"})
+  @(get-from-cache s1 {:k "42"})
 
   (do (.terminate s0)
       (.terminate s1)))

@@ -1,52 +1,52 @@
 (ns lotuc.examples.akka.fsm
   (:require
-   [lotuc.akka.common.log :refer [slf4j-log]]
-   [lotuc.akka.javadsl.actor.behaviors :as behaviors]
-   [lotuc.akka.system :refer [create-system]])
-  (:import
-   (java.time Duration)))
+   [lotuc.akka.actor.typed.actor-ref :as actor-ref]
+   [lotuc.akka.actor.typed.actor-system :as actor-system]
+   [lotuc.akka.actor.scaladsl :as dsl]
+   [lotuc.akka.common.slf4j :refer [slf4j-log]]))
 
 (set! *warn-on-reflection* true)
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-fsm-java
 
 (defmacro info [ctx msg & args]
-  `(slf4j-log (.getLog ~ctx) info ~msg (into-array [~@args])))
+  `(slf4j-log (dsl/log ~ctx) info ~msg ~@args))
 
 (def chopstck-behavior
-  (behaviors/setup
-   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
+  (dsl/setup
+   (fn [ctx]
      (letfn [(available []
-               (behaviors/receive-message
-                (fn [{:keys [action ^akka.actor.typed.ActorRef hakker]}]
-                  (when (= action :Take)
-                    (.tell hakker {:chopstick (.getSelf ctx) :taken? true})
-                    (taken-by hakker)))))
+               (dsl/receive-message
+                (fn [{:keys [action hakker]}]
+                  (or (when (= action :Take)
+                        (actor-ref/tell hakker {:chopstick (dsl/self ctx) :taken? true})
+                        (taken-by hakker))
+                      :same))))
              (taken-by [hakker-holder]
-               (behaviors/receive-message
+               (dsl/receive-message
                 (fn [{:keys [action ^akka.actor.typed.ActorRef hakker]}]
-                  (cond
-                    (= action :Take)
-                    (.tell hakker {:chopstick (.getSelf ctx) :taken? false})
+                  (or (cond
+                        (= action :Take)
+                        (actor-ref/tell hakker {:chopstick (dsl/self ctx) :taken? false})
 
-                    (and (= action :Put) (= hakker hakker-holder))
-                    (available)))))]
+                        (and (= action :Put) (= hakker hakker-holder))
+                        (available))
+                      :same))))]
        (available)))))
 
-(defn hakker-behavior [name
-                       ^akka.actor.typed.ActorRef left
-                       ^akka.actor.typed.ActorRef right]
-  (behaviors/setup
-   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
+(defn hakker-behavior [hakker-name left right]
+  (dsl/setup
+   (fn [ctx]
      (letfn [(thinking []
-               (behaviors/receive-message
+               (dsl/receive-message
                 (fn [{:keys [action]}]
-                  (when (= action :Eat)
-                    (.tell left {:action :Take :hakker (.getSelf ctx)})
-                    (.tell right {:action :Take :hakker (.getSelf ctx)})
-                    (hungry)))))
+                  (or (when (= action :Eat)
+                        (actor-ref/tell left {:action :Take :hakker (dsl/self ctx)})
+                        (actor-ref/tell right {:action :Take :hakker (dsl/self ctx)})
+                        (hungry))
+                      :unhandled))))
              (hungry []
-               (behaviors/receive-message
+               (dsl/receive-message
                 (fn [{:keys [chopstick taken?]}]
                   (if taken?
                     (cond
@@ -55,56 +55,62 @@
                     (first-chopstick-denied)))))
              (wait-for-other-chopstick [chopstick-to-wait-for
                                         ^akka.actor.typed.ActorRef taken-chopstick]
-               (behaviors/receive-message
+               (dsl/receive-message
                 (fn [{:keys [chopstick taken?]}]
-                  (when (= chopstick chopstick-to-wait-for)
+                  (if (= chopstick chopstick-to-wait-for)
                     (if taken?
                       (do (info ctx "{} picked up {} and {} and starts to eat"
-                                name (.. left path name) (.. right path name))
-                          (start-eating (Duration/ofSeconds 5)))
-                      (do (.tell taken-chopstick {:action :Put :hakker (.getSelf ctx)})
-                          (start-thinking (Duration/ofMillis 10))))))))
+                                hakker-name
+                                (.name (actor-ref/path left))
+                                (.name (actor-ref/path right)))
+                          (start-eating "5.sec"))
+                      (do (.tell taken-chopstick {:action :Put :hakker (dsl/self ctx)})
+                          (start-thinking "10.sec")))
+                    :unhandled))))
              (eating []
-               (behaviors/receive-message
+               (dsl/receive-message
                 (fn [{:keys [action]}]
-                  (when (= action :Think)
-                    (info ctx "{} puts down his chopsticks and starts to think" name)
-                    (.tell left {:action :Put :hakker (.getSelf ctx)})
-                    (.tell right {:action :Put :hakker (.getSelf ctx)})
-                    (start-thinking (Duration/ofSeconds 5))))))
+                  (or (when (= action :Think)
+                        (info ctx "{} puts down his chopsticks and starts to think" hakker-name)
+                        (actor-ref/tell left {:action :Put :hakker (dsl/self ctx)})
+                        (actor-ref/tell right {:action :Put :hakker (dsl/self ctx)})
+                        (start-thinking "5.sec"))
+                      :unhandled))))
              (first-chopstick-denied []
-               (behaviors/receive-message
-                (fn [{:keys [^akka.actor.typed.ActorRef chopstick taken?]}]
+               (dsl/receive-message
+                (fn [{:keys [chopstick taken?]}]
                   (if taken?
-                    (do (.tell chopstick {:action :Put :hakker (.getSelf ctx)})
-                        (start-thinking (Duration/ofMillis 10)))
-                    (start-thinking (Duration/ofMillis 10))))))
+                    (do (actor-ref/tell chopstick {:action :Put :hakker (dsl/self ctx)})
+                        (start-thinking "10.millis"))
+                    (start-thinking "10.millis")))))
              (start-thinking [duration]
-               (.scheduleOnce ctx duration (.getSelf ctx) {:action :Eat})
+               (dsl/schedule-once ctx duration (dsl/self ctx) {:action :Eat})
                (thinking))
              (start-eating [duration]
-               (.scheduleOnce ctx duration (.getSelf ctx) {:action :Think})
+               (dsl/schedule-once ctx duration (dsl/self ctx) {:action :Think})
                (eating))]
-       (behaviors/receive-message
+       (dsl/receive-message
         (fn [{:keys [action]}]
-          (when (= action :Think)
-            (info ctx "{} starts to think" name)
-            (start-thinking (Duration/ofSeconds 3)))))))))
+          (or (when (= action :Think)
+                (info ctx "{} starts to think" hakker-name)
+                (start-thinking "3.sec"))
+              :unhandled)))))))
 
 (def dining-behavior
-  (behaviors/setup
-   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
+  (dsl/setup
+   (fn [ctx]
      (let [hakker-names ["Ghosh" "Boner" "Klang" "Krasser" "Manie"]
            chopsticks (->> hakker-names
-                           (map-indexed (fn [i _] (.spawn ctx chopstck-behavior (str "Chopstick" i))))
+                           (map-indexed (fn [i _] (dsl/spawn ctx chopstck-behavior (str "Chopstick" i))))
                            (into []))
            hakkers (for [[i n] (map-indexed (fn [i n] [i n]) hakker-names)
                          :let [left (get chopsticks i)
                                right (get chopsticks (mod (inc i) (count hakker-names)))]]
-                     (.spawn ctx (hakker-behavior n left right) n))]
+                     (dsl/spawn ctx (hakker-behavior n left right) n))]
        (doseq [^akka.actor.typed.ActorRef hakker hakkers]
-         (.tell hakker {:action :Think}))))))
+         (actor-ref/tell hakker {:action :Think})))
+     :empty)))
 
 (comment
-  (def s (create-system dining-behavior "helloakka"))
-  (.terminate s))
+  (def s (actor-system/create-system dining-behavior "helloakka"))
+  (actor-system/terminate s))

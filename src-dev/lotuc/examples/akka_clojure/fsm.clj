@@ -1,9 +1,7 @@
 (ns lotuc.examples.akka-clojure.fsm
   (:require
    [lotuc.akka-clojure :as a]
-   [lotuc.akka.system :refer [create-system]])
-  (:import
-   (java.time Duration)))
+   [lotuc.akka.actor.typed.actor-system :as actor-system]))
 
 (set! *warn-on-reflection* true)
 
@@ -13,18 +11,22 @@
   (letfn [(available []
             (a/receive-message
              (fn [{:keys [action hakker]}]
-               (when (= action :Take)
-                 (a/! hakker {:chopstick (a/self) :taken? true})
-                 (taken-by hakker)))))
+               (if (= action :Take)
+                 (do (a/! hakker {:chopstick (a/self) :taken? true})
+                     (taken-by hakker))
+                 :same))))
           (taken-by [hakker-holder]
             (a/receive-message
              (fn [{:keys [action hakker]}]
                (cond
                  (= action :Take)
-                 (a/! hakker {:chopstick (a/self) :taken? false})
+                 (do (a/! hakker {:chopstick (a/self) :taken? false})
+                     :same)
 
                  (and (= action :Put) (= hakker hakker-holder))
-                 (available)))))]
+                 (available)
+
+                 :else :same))))]
     (available)))
 
 (a/setup hakker-behavior [hakker-name
@@ -33,43 +35,47 @@
   (letfn [(thinking []
             (a/receive-message
              (fn [{:keys [action]}]
-               (when (= action :Eat)
-                 (a/! left-chopstick {:action :Take :hakker (a/self)})
-                 (a/! right-chopstick {:action :Take :hakker (a/self)})
-                 (hungry)))))
+               (if (= action :Eat)
+                 (do (a/! left-chopstick {:action :Take :hakker (a/self)})
+                     (a/! right-chopstick {:action :Take :hakker (a/self)})
+                     (hungry))
+                 :same))))
           (hungry []
             (a/receive-message
              (fn [{:keys [chopstick taken?]}]
                (if taken?
                  (cond
                    (= chopstick left-chopstick) (wait-for-other-chopstick right-chopstick left-chopstick)
-                   (= chopstick right-chopstick) (wait-for-other-chopstick left-chopstick right-chopstick))
+                   (= chopstick right-chopstick) (wait-for-other-chopstick left-chopstick right-chopstick)
+                   :else :same)
                  (first-chopstick-denied)))))
           (wait-for-other-chopstick [chopstick-to-wait-for taken-chopstick]
             (a/receive-message
              (fn [{:keys [chopstick taken?]}]
-               (when (= chopstick chopstick-to-wait-for)
+               (if (= chopstick chopstick-to-wait-for)
                  (if taken?
                    (do (a/info "{} picked up {} and {} and starts to eat"
                                hakker-name (.. left-chopstick path name) (.. right-chopstick path name))
-                       (start-eating (Duration/ofSeconds 5)))
+                       (start-eating "5.sec"))
                    (do (a/! taken-chopstick {:action :Put :hakker (a/self)})
-                       (start-thinking (Duration/ofMillis 10))))))))
+                       (start-thinking "10.millis")))
+                 :same))))
           (eating []
             (a/receive-message
              (fn [{:keys [action]}]
-               (when (= action :Think)
-                 (a/info "{} puts down his chopsticks and starts to think" hakker-name)
-                 (a/! left-chopstick {:action :Put :hakker (a/self)})
-                 (a/! right-chopstick {:action :Put :hakker (a/self)})
-                 (start-thinking (Duration/ofSeconds 5))))))
+               (if (= action :Think)
+                 (do (a/info "{} puts down his chopsticks and starts to think" hakker-name)
+                     (a/! left-chopstick {:action :Put :hakker (a/self)})
+                     (a/! right-chopstick {:action :Put :hakker (a/self)})
+                     (start-thinking "5.sec"))
+                 :same))))
           (first-chopstick-denied []
             (a/receive-message
              (fn [{:keys [chopstick taken?]}]
                (if taken?
                  (do (a/! chopstick {:action :Put :hakker (a/self)})
-                     (start-thinking (Duration/ofMillis 10)))
-                 (start-thinking (Duration/ofMillis 10))))))
+                     (start-thinking "10.millis"))
+                 (start-thinking "10.millis")))))
           (start-thinking [duration]
             (a/schedule-once duration {:action :Eat})
             (thinking))
@@ -78,9 +84,10 @@
             (eating))]
     (a/receive-message
      (fn [{:keys [action]}]
-       (when (= action :Think)
-         (a/info "{} starts to think" hakker-name)
-         (start-thinking (Duration/ofSeconds 3)))))))
+       (if (= action :Think)
+         (do (a/info "{} starts to think" hakker-name)
+             (start-thinking "3.sec"))
+         :same)))))
 
 (a/setup dining-behavior []
   (let [hakker-names ["Ghosh" "Boner" "Klang" "Krasser" "Manie"]
@@ -92,8 +99,9 @@
                             right (get chopsticks (mod (inc i) (count hakker-names)))]]
                   (a/spawn (hakker-behavior n left right) n))]
     (doseq [hakker hakkers]
-      (a/! hakker {:action :Think}))))
+      (a/! hakker {:action :Think}))
+    :empty))
 
 (comment
-  (def s (create-system (dining-behavior) "helloakka"))
+  (def s (actor-system/create-system (dining-behavior) "helloakka"))
   (.terminate s))

@@ -1,17 +1,16 @@
 (ns lotuc.examples.akka.persistence-multi-dc
   (:require
    [clojure.set :as set]
-   [lotuc.akka.javadsl.actor :as javadsl.actor]
-   [lotuc.akka.javadsl.actor.behaviors :as behaviors]
-   [lotuc.akka.system :refer [create-system-from-config]])
+   [lotuc.akka.actor.scaladsl :as dsl]
+   [lotuc.akka.actor.typed.actor-system :as actor-system]
+   [lotuc.akka.actor.typed.scaladsl.ask-pattern :as scaladsl.ask-pattern])
   (:import
    (akka.cluster.sharding.typed ReplicatedEntityProvider ReplicatedShardingExtension)
    (akka.pattern StatusReply)
-   (akka.persistence.cassandra.query.javadsl CassandraReadJournal)
+   (akka.persistence.cassandra.query.scaladsl CassandraReadJournal)
    (akka.persistence.typed RecoveryCompleted ReplicaId ReplicationId)
    (akka.persistence.typed.crdt ORSet)
-   (akka.persistence.typed.scaladsl Effect EventSourcedBehavior ReplicatedEventSourcing)
-   (java.time Duration)))
+   (akka.persistence.typed.scaladsl Effect EventSourcedBehavior ReplicatedEventSourcing)))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-persistence-dc-java
 
@@ -40,8 +39,8 @@
             (let [millis-until-closing (- closing-at (.currentTimeMillis replication-context))]
               (->> {:timer-key :Finish
                     :timer-type :single
-                    :delay (Duration/ofMillis millis-until-closing)}
-                   (javadsl.actor/start-timer timers :Finish))))
+                    :delay (str millis-until-closing ".millis")}
+                   (dsl/start-timer timers :Finish))))
 
           (read-only-command-handler [{:keys [phase highest-bid highest-counter-offer] :as state}
                                       {:keys [action reply-to] :as command}]
@@ -165,19 +164,18 @@
                  (recovery-completed state)))))))))
 
 (defn auction [replication-id initial-bid closing-at responsible-for-closing]
-  (behaviors/setup
-   (fn [{:keys [context timers] :as ctx}]
-     (ReplicatedEventSourcing/commonJournalConfig
-      replication-id
-      all-replicas
-      (CassandraReadJournal/Identifier)
-      (reify scala.Function1
-        (apply [_ replication-ctx]
-          (auction* (assoc ctx :replication-context replication-ctx)
-                    closing-at
-                    responsible-for-closing
-                    initial-bid)))))
-   {:with-timer true}))
+  (dsl/setup
+   (fn [context]
+     (dsl/with-timers
+       (fn [timers]
+         (ReplicatedEventSourcing/commonJournalConfig
+          replication-id
+          all-replicas
+          (CassandraReadJournal/Identifier)
+          (reify scala.Function1
+            (apply [_ replication-ctx]
+              (-> {:context context :timers timers :replication-context replication-ctx}
+                  (auction* closing-at responsible-for-closing initial-bid))))))))))
 
 (defn bank-account-event-sourced-behavior [replication-ctx context]
   (EventSourcedBehavior/apply
@@ -222,7 +220,7 @@
          state')))))
 
 (defn bank-account [replication-id]
-  (behaviors/setup
+  (dsl/setup
    (fn [ctx]
      (ReplicatedEventSourcing/commonJournalConfig
       replication-id
@@ -306,8 +304,8 @@
    (scala.reflect.ClassTag/Any)))
 
 (defn start-node [port dc]
-  (create-system-from-config
-   (behaviors/receive-message
+  (actor-system/create-system-from-config
+   (dsl/receive-message
     (fn [_] :same))
    "PersistenceMultiDc"
    "persistence-multi-dc.conf"
@@ -320,14 +318,13 @@
         ref (-> (.entityRefsFor sharding resource-id)
                 (.get (ReplicaId. dc))
                 (.get))]
-    (-> (javadsl.actor/ask ref
-                           (fn [reply-to] (assoc msg
-                                                 :resource-id resource-id
-                                                 :reply-to reply-to))
-                           (Duration/ofSeconds 5)
-                           (.scheduler system))
-        (.get)
-        (#(if (instance? StatusReply %) (.getValue %) %)))))
+    (-> (scaladsl.ask-pattern/ask
+         ref
+         (fn [reply-to] (assoc msg
+                               :resource-id resource-id
+                               :reply-to reply-to))
+         "5.sec"
+         (actor-system/scheduler system)))))
 
 (def ask-thumbs-up (partial ask* thumbs-up-counter-provider))
 (def ask-bank-account (partial ask* bank-account-provider))
@@ -337,6 +334,8 @@
   ;; Clojure REPL with Java 8/11 (tested myself), and start the testing
   ;; cassandra instance with the following code there (or you can use your own
   ;; existing cassandra instance).
+
+  ;; clojure -M:cassandra-launcher
   (do (require '[clojure.java.io :as io])
       (import '(akka.persistence.cassandra.testkit CassandraLauncher))
       (CassandraLauncher/start (io/file "target/cassandra-db")
@@ -355,38 +354,38 @@
   ;; Thumbs up example
 
   ;; op on one dc
-  (ask-thumbs-up s0 "eu-west" "a" {:action :GetUsers})
-  (ask-thumbs-up s0 "eu-west" "a" {:action :GetCount})
-  (ask-thumbs-up s0 "eu-west" "a" {:action :GiveThumbsUp :user-id "lotuc"})
-  (ask-thumbs-up s0 "eu-west" "a" {:action :GiveThumbsUp :user-id "42"})
+  @(ask-thumbs-up s0 "eu-west" "a" {:action :GetUsers})
+  @(ask-thumbs-up s0 "eu-west" "a" {:action :GetCount})
+  @(ask-thumbs-up s0 "eu-west" "a" {:action :GiveThumbsUp :user-id "lotuc"})
+  @(ask-thumbs-up s0 "eu-west" "a" {:action :GiveThumbsUp :user-id "42"})
 
   ;; try retreive from another dc
-  (ask-thumbs-up s1 "eu-central" "a" {:action :GetUsers})
-  (ask-thumbs-up s1 "eu-central" "a" {:action :GetCount})
+  @(ask-thumbs-up s1 "eu-central" "a" {:action :GetUsers})
+  @(ask-thumbs-up s1 "eu-central" "a" {:action :GetCount})
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Bank transaction example
 
-  (ask-bank-account s0 "eu-west" "a" {:action :GetBalance})
-  (ask-bank-account s0 "eu-west" "a" {:action :Deposit :amount 42})
-  (ask-bank-account s0 "eu-west" "a" {:action :Withdraw :amount 42})
+  @(ask-bank-account s0 "eu-west" "a" {:action :GetBalance})
+  @(ask-bank-account s0 "eu-west" "a" {:action :Deposit :amount 42})
+  @(ask-bank-account s0 "eu-west" "a" {:action :Withdraw :amount 42})
 
   (defn get-dc-balances []
-    {"eu-west" (try (ask-bank-account s0 "eu-west" "a" {:action :GetBalance}) (catch Exception e e))
-     "eu-central" (try (ask-bank-account s1 "eu-central" "a" {:action :GetBalance}) (catch Exception e e))})
+    {"eu-west" (try (.getValue @(ask-bank-account s0 "eu-west" "a" {:action :GetBalance})) (catch Exception e e))
+     "eu-central" (try (.getValue @(ask-bank-account s1 "eu-central" "a" {:action :GetBalance})) (catch Exception e e))})
 
   ;; you can find inconsistency for different dc here (may need to run multiple
   ;; times)
-  (do (ask-bank-account s0 "eu-west" "a" {:action :Withdraw :amount 2})
+  (do @(ask-bank-account s0 "eu-west" "a" {:action :Withdraw :amount 2})
       (get-dc-balances))
 
   ;; reset balance to 0 for testing
-  (let [v (ask-bank-account s0 "eu-west" "a" {:action :GetBalance})]
-    (cond (neg? v) (ask-bank-account s0 "eu-west" "a" {:action :Deposit :amount (abs v)})
-          (pos? v) (ask-bank-account s0 "eu-west" "a" {:action :Withdraw :amount v})))
+  (let [v (.getValue @(ask-bank-account s0 "eu-west" "a" {:action :GetBalance}))]
+    (cond (neg? v) @(ask-bank-account s0 "eu-west" "a" {:action :Deposit :amount (abs v)})
+          (pos? v) @(ask-bank-account s0 "eu-west" "a" {:action :Withdraw :amount v})))
 
-  (do (ask-bank-account s0 "eu-west" "a" {:action :Deposit :amount 14})
-      (ask-bank-account s0 "eu-west" "a" {:action :Withdraw :amount 14})
-      (ask-bank-account s1 "eu-central" "a" {:action :Withdraw :amount 14})
+  (do @(ask-bank-account s0 "eu-west" "a" {:action :Deposit :amount 14})
+      @(ask-bank-account s0 "eu-west" "a" {:action :Withdraw :amount 14})
+      @(ask-bank-account s1 "eu-central" "a" {:action :Withdraw :amount 14})
       ;; two dcs both withdraw the last 14
       (get-dc-balances)))

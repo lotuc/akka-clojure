@@ -1,17 +1,19 @@
 (ns lotuc.examples.akka.cluster-sharding-killrweather
   (:require
-   [lotuc.akka.common.log :refer [slf4j-log]]
-   [lotuc.akka.javadsl.actor :as javadsl.actor]
-   [lotuc.akka.javadsl.actor.behaviors :as behaviors]
-   [lotuc.akka.system :refer [create-system-from-config]])
-  (:import
-   (akka.actor.typed PostStop)
-   (akka.cluster.sharding.typed.javadsl ClusterSharding Entity EntityTypeKey)))
+   [lotuc.akka.actor.scaladsl :as dsl]
+   [lotuc.akka.actor.typed.actor-ref :as actor-ref]
+   [lotuc.akka.actor.typed.actor-system :as actor-system]
+   [lotuc.akka.actor.typed.scaladsl.ask-pattern :as scaladsl.ask-pattern]
+   [lotuc.akka.cluster.sharding.typed.scaladsl.cluster-sharding :as dsl.cluster-sharding]
+   [lotuc.akka.cnv :as cnv]
+   [lotuc.akka.common.slf4j :refer [slf4j-log]]))
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-sharding-java
 
+(set! *warn-on-reflection* true)
+
 (defmacro info [ctx msg & args]
-  `(slf4j-log (.getLog ~ctx) info ~msg ~@args))
+  `(slf4j-log (dsl/log ~ctx) info ~msg ~@args))
 
 (defn- calc-result [data func]
   (when (seq data)
@@ -43,63 +45,64 @@
               (info context "{} total readings from station {}, type {}, average {}, diff: processingTime - eventTime: {} ms"
                     (count @!values) wsid (:data-type data) avg
                     (- processing-timestamp (:event-time data))))
-            (.tell reply-to {:action :DataRecorded :wsid wsid})
+            (actor-ref/tell reply-to {:action :DataRecorded :wsid wsid})
             :same)
           (on-query [{:keys [reply-to func data-type]}]
             (let [data-for-type (filter #(= (:data-type %) data-type) @!values)
                   query-result (or (calc-result data-for-type func) [])]
-              (.tell reply-to {:action :QueryResult
-                               :wsid wsid
-                               :data-type data-type
-                               :function func
-                               :readings (count query-result)
-                               :value query-result})))]
+              (actor-ref/tell reply-to {:action :QueryResult
+                                        :wsid wsid
+                                        :data-type data-type
+                                        :function func
+                                        :readings (count query-result)
+                                        :value query-result}))
+            :same)]
     (cond
       (= action :Record) (on-record m)
       (= action :Query) (on-query m))))
 
 (defn weather-station [wsid]
   (let [!values (atom [])]
-    (behaviors/receive
+    (dsl/receive
      (fn [ctx {:keys [action] :as m}]
        (on-weather-station-message {:context ctx :wsid wsid :!values !values} m))
-     (fn [ctx signal]
-       (when (instance? PostStop signal)
-         (info ctx "Stopping, losing all recorded state for station {}" wsid))
+     (fn [ctx signal-object]
+       (let [{:keys [signal] :as v} (cnv/->clj signal-object)]
+         (if (= signal :post-stop)
+           (info ctx "Stopping, losing all recorded state for station {}" wsid)
+           (info ctx "{}: recv signal {} {}" wsid signal signal-object v)))
        :same))))
 
-(def type-key (EntityTypeKey/create Object "WeatherStation"))
+(def type-key "WeatherStation")
 
 (defn weather-station-init-sharding [system]
-  (.init (ClusterSharding/get system)
-         (Entity/of type-key
-                    (reify akka.japi.function.Function
-                      (apply [_ entity-context]
-                        (weather-station (.getEntityId entity-context)))))))
+  (.init (dsl.cluster-sharding/get-cluster-sharding system)
+         (dsl.cluster-sharding/create-entity
+          type-key (fn [{:keys [entity-id]}]
+                     (weather-station entity-id)))))
 
 (defn killr-weather-guardian []
-  (behaviors/setup
+  (dsl/setup
    (fn [ctx]
-     (weather-station-init-sharding (.getSystem ctx))
+     (weather-station-init-sharding (dsl/system ctx))
      :empty)))
 
 (defn startup [port]
-  (create-system-from-config
+  (actor-system/create-system-from-config
    (killr-weather-guardian)
    "KillrWeather"
    "killr-weather.conf"
    {"akka.remote.artery.canonical.port" port}))
 
 (defn- ask* [^akka.actor.typed.ActorSystem system wsid msg]
-  (let [sharding (ClusterSharding/get system)
+  (let [sharding (dsl.cluster-sharding/get-cluster-sharding system)
         timeout (.. system settings config
                     (getDuration "killrweather.routes.ask-timeout"))
-        ref (.entityRefFor sharding type-key wsid)]
-    (-> (javadsl.actor/ask ref
-                           (fn [reply-to] (assoc msg :reply-to reply-to))
-                           timeout
-                           (.scheduler system))
-        (.get))))
+        ref (dsl.cluster-sharding/entity-ref-for sharding type-key wsid)]
+    (scaladsl.ask-pattern/ask ref
+                              (fn [reply-to] (assoc msg :reply-to reply-to))
+                              timeout
+                              (.scheduler system))))
 
 (defn record-data
   [system wsid data]
@@ -116,17 +119,16 @@
   (do (def s0 (startup 2553))
       (def s1 (startup 2554)))
 
-  (record-data s0 "abc" {:event-time (System/currentTimeMillis)
-                         :data-type "temperature"
-                         :value 30.0})
-  (record-data s0 "abc" {:event-time (System/currentTimeMillis)
-                         :data-type "temperature"
-                         :value 20.0})
-  (query s0 "abc" "temperature" :average)
-  (query s0 "abc" "temperature" :current)
-  (query s0 "abc" "temperature" :high-low)
-
-  (query s1 "def" "temperature" :high-low)
+  @(record-data s0 "abc" {:event-time (System/currentTimeMillis)
+                          :data-type "temperature"
+                          :value 30.0})
+  @(record-data s0 "abc" {:event-time (System/currentTimeMillis)
+                          :data-type "temperature"
+                          :value 20.0})
+  @(query s0 "abc" "temperature" :average)
+  @(query s0 "abc" "temperature" :current)
+  @(query s0 "abc" "temperature" :high-low)
+  @(query s1 "def" "temperature" :high-low)
 
   (do (.terminate s0)
       (.terminate s1)))

@@ -4,7 +4,8 @@
         com.typesafe.akka/akka-cluster-typed_2.13 {:mvn/version "2.9.0"}
         com.typesafe.akka/akka-cluster-sharding-typed_2.13 {:mvn/version "2.9.0"}
         com.typesafe.akka/akka-persistence-typed_2.13 {:mvn/version "2.9.0"}
-        com.taoensso/nippy {:mvn/version "3.3.0"}}
+        com.taoensso/nippy {:mvn/version "3.3.0"}
+        potemkin/potemkin {:mvn/version "0.4.6"}}
  :aliases
  {:build {:deps {io.github.seancorfield/build-clj {:git/tag "v0.6.4" :git/sha "c21cfde"}}
           :ns-default build}

@@ -1,4 +1,4 @@
-(ns lotuc.akka.common.log)
+(ns lotuc.akka.common.slf4j)
 
 (set! *warn-on-reflection* true)
 
@@ -24,8 +24,32 @@
           `(let [~arr (into-array Object [~@args])]
              (~n' ~logger' ~format' ~arr))))))
 
+(defmacro ->LogLevel [level]
+  (if-some [v (get {:error 'org.slf4j.event.Level/ERROR
+                    :warn  'org.slf4j.event.Level/WARN
+                    :info  'org.slf4j.event.Level/INFO
+                    :debug 'org.slf4j.event.Level/DEBUG
+                    :trace 'org.slf4j.event.Level/TRACE}
+                   (when (keyword? level) level))]
+    v
+    `(let [v# ~level]
+       (or (get {:error org.slf4j.event.Level/ERROR
+                 :warn  org.slf4j.event.Level/WARN
+                 :info  org.slf4j.event.Level/INFO
+                 :debug org.slf4j.event.Level/DEBUG
+                 :trace org.slf4j.event.Level/TRACE}
+                (when (keyword? v#) v#))
+           (and (instance? org.slf4j.event.Level v#) v#)
+           (throw (ex-info (str "illegal slf4j log level: " v#) {:value v#}))))))
+
 (comment
   (macroexpand '(slf4j-log logger info "hello"))
   (macroexpand '(slf4j-log logger info "hello {}"       "1"))
   (macroexpand '(slf4j-log logger info "hello {} {}"    "1" "2"))
-  (macroexpand '(slf4j-log logger info "hello {} {} {}" "1" "2" "3")))
+  (macroexpand '(slf4j-log logger info "hello {} {} {}" "1" "2" "3"))
+
+  ;; expand a compile time value
+  (macroexpand '(let [level :info] (->LogLevel level)))
+  ;; expand a runtime time value
+  (macroexpand '(->LogLevel level))
+  (let [level :info] (->LogLevel level)))

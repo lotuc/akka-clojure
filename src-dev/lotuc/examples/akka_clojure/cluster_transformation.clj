@@ -2,76 +2,80 @@
   (:require
    [clojure.string :as s]
    [lotuc.akka-clojure :as a]
-   [lotuc.akka.actor.receptionist :as actor.receptionist]
-   [lotuc.akka.system :refer [create-system-from-config]])
-  (:import
-   (akka.actor.typed.receptionist Receptionist$Listing)
-   (java.time Duration)))
+   [lotuc.akka.actor.typed.receptionist :as receptionist]
+   [lotuc.akka.cnv :as cnv]
+   [lotuc.akka.actor.typed.actor-system :as actor-system]))
 
 (set! *warn-on-reflection* true)
 
 ;;; https://developer.lightbend.com/start/?group=akka&project=akka-samples-cluster-java
 ;;; transformation
 
-(def worker-service-key (actor.receptionist/create-service-key "Worker"))
+(def worker-service-key "Worker")
 
 (a/setup frontend [] {:with-timer true}
   (let [!workers (atom []) !job-counter (atom 0)]
     (a/subscribe-to-receptionist worker-service-key)
     (a/start-timer :Tick {:timer-key :Tick
                           :timer-type :fix-delay
-                          :delay (Duration/ofSeconds 2)})
+                          :delay "2.sec"})
     (a/receive-message
      (fn [{:keys [action] :as m}]
-       (cond
-         (= m :Tick)
+       (case (if (keyword? m) m action)
+         :Tick
          (if-some [workers (let [ws @!workers] (when (seq ws) ws))]
-           (let [timeout (Duration/ofSeconds 5)
-                 selected-worker (workers (mod @!job-counter (count workers)))
+           (let [selected-worker (workers (mod @!job-counter (count workers)))
                  text (str "hello-" @!job-counter)]
-             (->> (fn [r _t]
-                    (if r
-                      {:action :TransformCompleted :original-text text :transformed-text (:text r)}
-                      {:action :JobFailed :why "Processing time out" :text text}))
-                  (a/ask selected-worker {:action :TransformText :text text} timeout))
+             (a/ask selected-worker {:action :TransformText :text text}
+                    (fn [r _t]
+                      (if r
+                        {:action :TransformCompleted :original-text text :transformed-text (:text r)}
+                        {:action :JobFailed :why "Processing time out" :text text}))
+                    "5.sec")
              (swap! !job-counter inc)
              :same)
-           (a/warn "Got tick request but no workers available, not sending any work"))
+           (do (a/warn "Got tick request but no workers available, not sending any work")
+               :same))
 
-         (keyword? action)
-         (case action
-           :WorkersUpdated
-           (do (reset! !workers (into [] (:new-workers m)))
-               (a/info "List of services registered with the receptionist changed: {}"
-                       (:new-workers m)))
+         :WorkersUpdated
+         (do (reset! !workers (into [] (:new-workers m)))
+             (a/info "List of services registered with the receptionist changed: {}"
+                     (:new-workers m))
+             :same)
 
-           :TransformCompleted
-           (a/info "Got completed transform of {}: {}" (:original-text m) (:transformed-text m))
+         :TransformCompleted
+         (do (a/info "Got completed transform of {}: {}" (:original-text m) (:transformed-text m))
+             :same)
 
-           :JobFailed
-           (a/warn "Transformation of text {} failed. Because: {}" (:text m) (:why m))
+         :JobFailed
+         (do (a/warn "Transformation of text {} failed. Because: {}" (:text m) (:why m))
+             :same)
 
-           (a/warn "Unkown action type: {} {}" action m))
-
-         (instance? Receptionist$Listing m)
-         (let [workers (into [] (.getServiceInstances ^Receptionist$Listing m worker-service-key))]
-           (reset! !workers workers)
-           (a/info "List of services registered with the receptionist changed: {}" workers)
-           :same))))))
+         (if-some [{:keys [get-service-instances]}
+                   (when (receptionist/receptionist-listing? m)
+                     (cnv/->clj m))]
+           (let [workers (into [] (get-service-instances worker-service-key))]
+             (reset! !workers workers)
+             (a/info "List of services registered with the receptionist changed: {}" workers)
+             :same)
+           :unhandled))))))
 
 (a/setup worker []
   (a/info "Registering myself with receptionist")
   (a/register-with-receptionist worker-service-key)
   (a/receive-message
     (fn [{:keys [action text reply-to] :as m}]
-      (a/tell reply-to {:action :TextTransformed :text (s/upper-case text)}))))
+      (a/tell reply-to {:action :TextTransformed :text (s/upper-case text)})
+      :same)))
 
 (a/setup worker-test []
   (let [w (a/spawn (worker) "worker0")]
     (a/tell w {:action :TransformText :text "hello world"
                :reply-to (a/self)})
     (a/receive-message
-     (fn [m] (println "recv:" m)))))
+     (fn [m]
+       (println "recv:" m)
+       :same))))
 
 (comment
   (def s (create-system-from-config
@@ -99,7 +103,7 @@
     :empty))
 
 (defn startup [role port]
-  (create-system-from-config
+  (actor-system/create-system-from-config
    (root-behavior)
    "ClusterSystem"
    "cluster-transformation"

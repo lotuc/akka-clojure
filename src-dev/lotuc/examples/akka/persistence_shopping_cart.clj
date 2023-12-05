@@ -1,7 +1,7 @@
 (ns lotuc.examples.akka.persistence-shopping-cart
   (:require
-   [lotuc.akka.javadsl.actor :as javadsl.actor]
-   [lotuc.akka.system :refer [create-system-from-config]])
+   [lotuc.akka.actor.typed.scaladsl.ask-pattern :as scaladsl.ask-pattern]
+   [lotuc.akka.actor.typed.actor-system :as actor-system])
   (:import
    (akka.actor.typed SupervisorStrategy)
    (akka.pattern StatusReply)
@@ -102,18 +102,18 @@
                           (Duration/ofMillis 200) (Duration/ofSeconds 5) 0.1))))
 
 (defn startup [cart-id port]
-  (create-system-from-config
+  (actor-system/create-system-from-config
    (shopping-cart cart-id)
    "PersistenceShoppingCart"
    "persistence-shopping-cart.conf"
    {"akka.remote.artery.canonical.port" port}))
 
 (defn- ask* [system msg]
-  (-> (javadsl.actor/ask system
-                         (fn [reply-to] (assoc msg :reply-to reply-to))
-                         (Duration/ofSeconds 5)
-                         (.scheduler system))
-      (.get)))
+  (scaladsl.ask-pattern/ask
+   system
+   (fn [reply-to] (assoc msg :reply-to reply-to))
+   "5.sec"
+   (actor-system/scheduler system)))
 
 (defn get-cart [system]
   (ask* system {:action :Get}))
@@ -133,10 +133,10 @@
 (comment
   (def s0 (startup "user-0" 25251))
 
-  (get-cart s0)
-  (checkout s0)
-  (add-item s0 "product-42" 2)
-  (adjust-item-quantity s0 "product-42" 3)
-  (remove-item s0 {:product-id "product-42"})
+  @(get-cart s0)
+  @(checkout s0)
+  @(add-item s0 "product-42" 2)
+  @(adjust-item-quantity s0 "product-42" 3)
+  @(remove-item s0 {:product-id "product-42"})
 
   (.terminate s0))

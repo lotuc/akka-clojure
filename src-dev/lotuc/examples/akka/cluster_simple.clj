@@ -1,11 +1,11 @@
 (ns lotuc.examples.akka.cluster-simple
   (:require
-   [lotuc.akka.cluster :as cluster]
-   [lotuc.akka.common.log :refer [slf4j-log]]
-   [lotuc.akka.javadsl.actor.behaviors :as behaviors]
-   [lotuc.akka.system :refer [create-system-from-config]])
-  (:import
-   (akka.cluster ClusterEvent$MemberEvent ClusterEvent$ReachabilityEvent)))
+   [lotuc.akka.actor.scaladsl :as dsl]
+   [lotuc.akka.cluster.typed.cluster :as cluster]
+   [lotuc.akka.common.slf4j :refer [slf4j-log]]
+   [lotuc.akka.actor.typed.actor-system :as actor-system]
+   [lotuc.akka.actor.typed.actor-ref :as actor-ref]
+   [lotuc.akka.cnv :as cnv]))
 
 (set! *warn-on-reflection* true)
 
@@ -13,27 +13,40 @@
 ;;; simple
 
 (defmacro info [ctx msg & args]
-  `(slf4j-log (.getLog ~ctx) info ~msg (into-array Object [~@args])))
+  `(slf4j-log (dsl/log ~ctx) info ~msg ~@args))
 
 (defn cluster-listener []
-  (behaviors/setup
-   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
-     (let [self (.getSelf ctx)
-           cluster (cluster/get-cluster (.getSystem ctx))]
+  (dsl/setup
+   (fn [ctx]
+     (let [self (dsl/self ctx)
+           cluster (cluster/get-cluster (dsl/system ctx))]
        (doto (.subscriptions cluster)
-         (.tell (cluster/create-subscribe self ClusterEvent$MemberEvent))
-         (.tell (cluster/create-subscribe self ClusterEvent$ReachabilityEvent)))
-       (behaviors/receive-message
-        (fn [m] (info ctx "recv: {} - {}" (class m) (bean m))))))))
+         (actor-ref/tell (cluster/create-subscribe self :member-event))
+         (actor-ref/tell (cluster/create-subscribe self :member-rechability-event)))
+       (dsl/receive-message
+        (fn [m]
+          (let [{:keys [dtype ev-type member] :as ev} (cnv/->clj m)]
+            (when (= dtype :cluster-event)
+              (case ev-type
+                :member-up
+                (info ctx "Member is up: {}" member)
+                :member-removed
+                (info ctx "Member is removed: {} after {}" member (:previous-status ev))
+                :member-unrechable
+                (info ctx "Member detected as unreachable: {}" member)
+                :member-rechable
+                (info ctx "Member back to reachable: {}" member)
+                nil)))
+          :same))))))
 
 (def root-behavior
-  (behaviors/setup
-   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
-     (.spawn ctx (cluster-listener) "ClusterListener")
+  (dsl/setup
+   (fn [ctx]
+     (dsl/spawn ctx (cluster-listener) "ClusterListener")
      :empty)))
 
 (defn startup [port]
-  (create-system-from-config
+  (actor-system/create-system-from-config
    root-behavior
    "ClusterSystem"
    "cluster-application.conf"
@@ -45,6 +58,6 @@
     (def s1 (startup 25252))
     (def s2 (startup 0)))
   (do
-    (.terminate s0)
-    (.terminate s1)
-    (.terminate s2)))
+    (actor-system/terminate s0)
+    (actor-system/terminate s1)
+    (actor-system/terminate s2)))

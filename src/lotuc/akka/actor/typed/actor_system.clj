@@ -1,17 +1,20 @@
-(ns lotuc.akka.system
+(ns lotuc.akka.actor.typed.actor-system
   (:import
-   (akka.actor.typed ActorSystem)
+   (akka.actor.typed ActorRef
+                     ActorSystem
+                     Behavior
+                     Props)
+   (akka.actor Address)
+   (akka.actor.typed.receptionist Receptionist)
    (com.typesafe.config ConfigFactory)))
 
 (set! *warn-on-reflection* true)
 
-;;; ActorSystem
-;;; https://doc.akka.io/japi/akka/current/akka/actor/typed/ActorSystem.html
-;;; ConfigFactory
-;;; https://lightbend.github.io/config/latest/api/com/typesafe/config/ConfigFactory.html
-
-(defn create-system [guardian-behavior name]
+(defn create-system ^ActorSystem [guardian-behavior name]
   (ActorSystem/create guardian-behavior name))
+
+(defn scheduler [^ActorSystem system]
+  (.scheduler system))
 
 (defn create-system-from-config
   "Create system with given config file.
@@ -23,11 +26,13 @@
     \"cluster-transformation.conf\"    ; the .conf extension can be ignored
     {\"akka.remote.artery.canonical.port\" port})
   ```"
-  ([^akka.actor.typed.Behavior guardian-behavior
+  (^ActorSystem
+   [^akka.actor.typed.Behavior guardian-behavior
     ^String name
     ^String config-resource-base-name]
    (create-system-from-config guardian-behavior name config-resource-base-name nil))
-  ([^akka.actor.typed.Behavior guardian-behavior
+  (^ActorSystem
+   [^akka.actor.typed.Behavior guardian-behavior
     ^String name
     ^String config-resource-base-name
     ^java.util.Map overrides-config]
@@ -44,3 +49,22 @@
                     :else
                     (ConfigFactory/parseMap overrides-config))]
        (ActorSystem/create guardian-behavior name config)))))
+
+(defn terminate [^ActorSystem system]
+  (.terminate system))
+
+(defn system-actor-of
+  ^ActorRef [^ActorSystem system ^Behavior behavior ^String actor-name]
+  (.systemActorOf system behavior actor-name (Props/empty)))
+
+(defn receptionist
+  ^Receptionist [^ActorSystem system]
+  (.receptionist system))
+
+(defn event-stream
+  ^ActorRef [^ActorSystem system]
+  (.eventStream system))
+
+(defn address
+  ^Address [^ActorSystem system]
+  (.address system))

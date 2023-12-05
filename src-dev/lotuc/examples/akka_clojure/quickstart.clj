@@ -1,7 +1,7 @@
 (ns lotuc.examples.akka-clojure.quickstart
   (:require
    [lotuc.akka-clojure :as a]
-   [lotuc.akka.system :refer [create-system]]))
+   [lotuc.akka.actor.typed.actor-system :as actor-system]))
 
 (set! *warn-on-reflection* true)
 
@@ -12,7 +12,8 @@
    (fn [{:keys [whom reply-to]}]
      (when whom
        (a/info "Hello {}!" whom)
-       (a/! reply-to {:whom whom :reply-to (a/self)})))))
+       (a/! reply-to {:whom whom :reply-to (a/self)}))
+     :same)))
 
 (defn greeter-bot-behavior [max]
   (let [greeter-counter (atom 0)]
@@ -23,7 +24,8 @@
          (a/info "Greeting {} for {}" @greeter-counter whom)
          (if (= @greeter-counter max)
            :stopped
-           (a/! reply-to {:whom whom :reply-to (a/self)})))))))
+           (do (a/! reply-to {:whom whom :reply-to (a/self)})
+               :same)))))))
 
 (defn greeter-main []
   (a/setup*
@@ -33,7 +35,8 @@
         (fn [{:keys [whom] :as m}]
           (when whom
             (let [bot (a/spawn (greeter-bot-behavior 3) whom)]
-              (a/! greeter {:whom whom :reply-to bot})))))))))
+              (a/! greeter {:whom whom :reply-to bot})))
+          :same))))))
 
 ;;; simplify the above pattern with setup macro
 (a/setup greeter-main-1 []
@@ -42,10 +45,11 @@
      (fn [{:keys [whom] :as m}]
        (when whom
          (let [bot (a/spawn (greeter-bot-behavior 3) whom)]
-           (a/! greeter {:whom whom :reply-to bot})))))))
+           (a/! greeter {:whom whom :reply-to bot})))
+       :same))))
 
 (comment
-  (def s (create-system (greeter-main) "helloakka"))
-  (def s (create-system (greeter-main-1) "helloakka"))
+  (def s (actor-system/create-system (greeter-main) "helloakka"))
+  (def s (actor-system/create-system (greeter-main-1) "helloakka"))
   (.terminate s)
   (a/tell s {:whom "42"}))

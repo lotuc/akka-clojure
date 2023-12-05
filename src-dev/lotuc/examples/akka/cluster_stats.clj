@@ -1,14 +1,14 @@
 (ns lotuc.examples.akka.cluster-stats
   (:require
    [clojure.string :as s]
-   [lotuc.akka.actor.receptionist :as actor.receptionist]
-   [lotuc.akka.cluster :as cluster]
-   [lotuc.akka.common.log :refer [slf4j-log]]
-   [lotuc.akka.javadsl.actor.behaviors :as behaviors]
-   [lotuc.akka.system :refer [create-system-from-config]])
-  (:import
-   (akka.actor.typed.javadsl Routers)
-   (java.time Duration)))
+   [lotuc.akka.actor.typed.actor-ref :as actor-ref]
+   [lotuc.akka.actor.typed.receptionist :as receptionist]
+   [lotuc.akka.actor.scaladsl :as dsl]
+   [lotuc.akka.cluster.member :as cluster.member]
+   [lotuc.akka.cluster.typed.cluster :as cluster]
+   [lotuc.akka.cluster.typed.cluster-singleton :as cluster-singleton]
+   [lotuc.akka.common.slf4j :refer [slf4j-log]]
+   [lotuc.akka.actor.typed.actor-system :as actor-system]))
 
 (set! *warn-on-reflection* true)
 
@@ -16,48 +16,58 @@
 ;;; stats
 
 (defmacro info [ctx msg & args]
-  `(slf4j-log (.getLog ~ctx) info ~msg ~@args))
+  `(slf4j-log (dsl/log ~ctx) info ~msg ~@args))
 
-(def stats-service-key (actor.receptionist/create-service-key "StatsService"))
+(def stats-service-key "StatsService")
 
 (defn- stats-worker*
-  [{:keys [^akka.actor.typed.javadsl.ActorContext context
-           ^akka.actor.typed.javadsl.TimerScheduler timers]}]
+  [{:keys [context timers]}]
   (info context "Worker starting up")
-  (.startTimerWithFixedDelay timers :EvictCache :EvictCache (Duration/ofSeconds 30))
+  (dsl/start-timer timers :EvictCache {:timer-key :EvictCache
+                                       :timer-type :fix-rate
+                                       :interval "30.sec"})
   (let [!cache (atom {})]
-    (behaviors/receive-message
+    (dsl/receive-message
      (fn [{:keys [action] :as m}]
        (cond
          (= m :EvictCache)
-         (do (reset! !cache {}) :same)
+         (do (reset! !cache {})
+             :same)
 
          (= action :Process)
          (let [{:keys [word ^akka.actor.typed.ActorRef reply-to]} m]
            (info context "Worker processing request [{}]" word)
            (let [length (get (swap! !cache update word (fn [v] (or v (count word)))) word)]
              (.tell reply-to {:action :Processed :word word :length length}))
-           :same))))))
+           :same)
 
-(defn stats-worker ^akka.actor.typed.Behavior []
-  (behaviors/setup stats-worker* {:with-timer true}))
+         :else
+         (do (info context "Unhandled message {}" m)
+             :unhandled))))))
 
-(defn stats-aggregator [words
-                        ^akka.actor.typed.ActorRef workers
-                        ^akka.actor.typed.ActorRef reply-to]
-  (behaviors/setup
-   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
+(defn stats-worker []
+  (dsl/setup
+   (fn [ctx]
+     (dsl/with-timers
+       (fn [timers]
+         (stats-worker* {:context ctx :timers timers}))))))
+
+(defn stats-aggregator [words workers reply-to]
+  (dsl/setup
+   (fn [ctx]
      (let [expected-responses (count words)
+           self (dsl/self ctx)
            !results (atom [])]
-       (.setReceiveTimeout ctx (Duration/ofSeconds 3) :Timeout)
+       (dsl/set-receive-timeout ctx "3.sec" :Timeout)
        (doseq [word words]
-         (.tell workers {:action :Process :word word :reply-to (.getSelf ctx)}))
+         (actor-ref/tell workers {:action :Process :word word :reply-to self}))
 
-       (behaviors/receive-message
+       (dsl/receive-message
         (fn [{:keys [action] :as m}]
           (cond
             (= m :Timeout)
-            (.tell reply-to {:action :JobFailed :reason "Service unavailable, try again later"})
+            (do (actor-ref/tell reply-to {:action :JobFailed :reason "Service unavailable, try again later"})
+                :same)
 
             (= action :Processed)
             (let [results (swap! !results conj (:length m))
@@ -65,13 +75,17 @@
               (if (= result-size expected-responses)
                 (let [sum (reduce + results)
                       mean-word-length (/ (double sum) result-size)]
-                  (.tell reply-to {:action :JobResult :mean-word-length mean-word-length})
+                  (actor-ref/tell reply-to {:action :JobResult :mean-word-length mean-word-length})
                   :stopped)
-                :same)))))))))
+                :same))
+
+            :else
+            (do (info ctx "Unhandled message {}" m)
+                :unhandled))))))))
 
 (defn stats-service [workers]
-  (behaviors/receive
-   (fn [^akka.actor.typed.javadsl.ActorContext ctx {:keys [action] :as m}]
+  (dsl/receive
+   (fn [ctx {:keys [action] :as m}]
      (cond
        (= m :Stop)
        :stopped
@@ -79,106 +93,114 @@
        (= action :ProcessText)
        (let [{:keys [text reply-to]} m
              words (s/split text #" ")]
-         (.spawnAnonymous ctx (stats-aggregator words workers reply-to))
-         :same)))))
+         (dsl/spawn-anonymous ctx (stats-aggregator words workers reply-to))
+         :same)
+
+       :else
+       (do (info ctx "Unhandled message {}" m)
+           :unhandled)))))
 
 (defn- stats-service-client*
-  [^akka.actor.typed.ActorRef service
-   {:keys [^akka.actor.typed.javadsl.ActorContext context
-           ^akka.actor.typed.javadsl.TimerScheduler timers]}]
-  (.startTimerWithFixedDelay timers :Tick :Tick (Duration/ofSeconds 2))
-  (behaviors/receive-message
+  [service {:keys [context timers]}]
+  (dsl/start-timer timers :Tick {:timer-key :Tick
+                                 :timer-type :fix-rate
+                                 :interval "2.sec"})
+  (dsl/receive-message
    (fn [{:keys [action] :as m}]
      (cond
        (= m :Tick)
        (do (info context "Sending process request")
-           (.tell service {:action :ProcessText
-                           :text "this is the text that will be analyzed"
-                           :reply-to (.getSelf context)})
+           (actor-ref/tell service {:action :ProcessText
+                                    :text "this is the text that will be analyzed"
+                                    :reply-to (dsl/self context)})
            :same)
 
        (= action :JobResult)
-       (info context "Service result: {}" (:mean-word-length m))))))
+       (do (info context "Service result: {}" (:mean-word-length m))
+           :same)
+
+       :else
+       (do (info context "Unhandled message: {}" m)
+           :unhandled)))))
 
 (defn stats-service-client [service]
-  (-> (partial stats-service-client* service)
-      (behaviors/setup {:with-timer true})))
+  (dsl/setup
+   (fn [ctx]
+     (dsl/with-timers
+       (fn [timers]
+         (stats-service-client* service {:context ctx :timers timers}))))))
 
 ;;; corresponds to original example's App.java
 (defn root-behavior []
-  (behaviors/setup
-   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
-     (let [cluster (cluster/get-cluster (.getSystem ctx))
+  (dsl/setup
+   (fn [ctx]
+     (let [system (dsl/system ctx)
+           cluster (cluster/get-cluster system)
            self-member (.selfMember cluster)]
        (cond
-         (.hasRole self-member "compute")
+         (cluster.member/has-role self-member "compute")
          (let [number-of-workers
-               (.. ctx getSystem settings config
+               (.. system settings config
                    (getInt "stats-service.workers-per-node"))
 
                worker-pool-behavior
-               (-> (Routers/pool number-of-workers (.narrow (stats-worker)))
-                   (.withConsistentHashingRouting
-                    1 (reify java.util.function.Function
-                        (apply [_ process] (:word process)))))
+               (-> (dsl/pool-router (stats-worker) number-of-workers)
+                   (dsl/pool-with-consistent-hashing-routing 1 :word))
 
-               workers (.spawn ctx worker-pool-behavior "WorkerRouter")
-               service (.spawn ctx (stats-service (.narrow workers)) "StatsService")]
-           (.. ctx getSystem receptionist
-               (tell (actor.receptionist/register stats-service-key (.narrow service))))
+               workers (dsl/spawn ctx worker-pool-behavior "WorkerRouter")
+               service (dsl/spawn ctx (stats-service workers) "StatsService")]
+           (actor-ref/tell (.receptionist system)
+                           (receptionist/register-service stats-service-key service))
            :empty)
 
          (.hasRole self-member "client")
-         (let [service-router (.spawn ctx (Routers/group stats-service-key) "ServiceRouter")]
-           (.spawn ctx (stats-service-client service-router) "Client")
+         (let [service-router (dsl/spawn ctx (dsl/group-router stats-service-key) "ServiceRouter")]
+           (dsl/spawn ctx (stats-service-client service-router) "Client")
            :empty))))))
 
-(def worker-service-key (actor.receptionist/create-service-key Object "Worker"))
+(def worker-service-key "Worker")
 
 ;;; corresponds to original example's AppOneMaster.java
 (defn root-behavior-one-master []
-  (behaviors/setup
-   (fn [^akka.actor.typed.javadsl.ActorContext ctx]
-     (let [system (.getSystem ctx)
+  (dsl/setup
+   (fn [ctx]
+     (let [system (dsl/system ctx)
            cluster (cluster/get-cluster system)
-           service-behavior (behaviors/setup
-                             (fn [^akka.actor.typed.javadsl.ActorContext singleton-ctx]
+           service-behavior (dsl/setup
+                             (fn [singleton-ctx]
                                (let [worker-group-behavior
-                                     (-> (Routers/group worker-service-key)
-                                         (.withConsistentHashingRouting
-                                          1 (reify java.util.function.Function
-                                              (apply [_ process] (:word process)))))
+                                     (-> (dsl/group-router worker-service-key)
+                                         (dsl/group-with-consistent-hashing-routing 1 :word))
 
                                      workers-router
-                                     (.spawn singleton-ctx worker-group-behavior
-                                             "WorkersRouter")]
+                                     (dsl/spawn singleton-ctx worker-group-behavior "WorkersRouter")]
                                  (stats-service workers-router))))
            service-singleton (->> {:stop-message :Stop
-                                   :settings (cluster/create-cluster-singleton-setting
-                                              system {:role "compute"})}
-                                  (cluster/singleton-actor-of
-                                   service-behavior "StatsService"))
-           service-proxy (-> (cluster/get-cluster-singleton (.getSystem ctx))
+                                   :settings (cluster-singleton/create-cluster-singleton-setting system {:role "compute"})}
+                                  (cluster-singleton/singleton-actor-of service-behavior "StatsService"))
+           service-proxy (-> (cluster-singleton/get-cluster-singleton system)
                              (.init service-singleton))
            self-member (.selfMember cluster)]
        (cond
-         (.hasRole self-member "compute")
-         (let [number-of-workers
-               (.. ctx getSystem settings config
-                   (getInt "stats-service.workers-per-node"))]
+         (cluster.member/has-role self-member "compute")
+         (let [number-of-workers (.. system settings config
+                                     (getInt "stats-service.workers-per-node"))]
            (info ctx "Starting {} workers" number-of-workers)
            (doseq [i (range 4)]
-             (let [worker (.spawn ctx (stats-worker) (str "StatsWorker" i))]
-               (.. ctx getSystem receptionist
-                   (tell (actor.receptionist/register worker-service-key (.narrow worker))))))
+             (let [worker (dsl/spawn ctx (stats-worker) (str "StatsWorker" i))]
+               (actor-ref/tell (.receptionist system)
+                               (receptionist/register-service worker-service-key worker))))
            :empty)
 
-         (.hasRole self-member "client")
-         (do (.spawn ctx (stats-service-client (.narrow service-proxy)) "Client")
-             :empty))))))
+         (cluster.member/has-role self-member "client")
+         (do (dsl/spawn ctx (stats-service-client service-proxy) "Client")
+             :empty)
+
+         :else
+         :empty)))))
 
 (defn startup [behavior role port]
-  (create-system-from-config
+  (actor-system/create-system-from-config
    behavior
    "ClusterSystem"
    "cluster-application.conf"
