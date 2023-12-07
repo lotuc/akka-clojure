@@ -191,19 +191,22 @@
   `active-timer?` and `cancel-timer`.
 
   ```Clojure
-  (start-timer msg {:timer-type :single :delay a-duration})
+  ;; single
+  {:msg :v0 :single \"10.ms\"}
+  {:msg :v0 :single {:delay \"10.ms\"}}
 
-  ;; for fix-delay timer, initial-delay is optional
-  (start-timer msg {:timer-type :fix-delay :delay a-duration})
-  (start-timer msg {:timer-type :fix-delay :delay a-duration :initial-delay a-duration'})
+  ;; fix-delay
+  {:msg :v0 :fix-delay \"10.ms\"}
+  {:msg :v0 :fix-delay {:delay \"10.ms\"}}
+  {:msg :v0 :fix-delay {:initial-delay \"10.ms\" :delay \"10.ms\"}}
 
-  ;; for fix-rate timer, initial-delay is optional
-  (start-timer msg {:timer-type :fix-rate :interval a-duration})
-  (start-timer msg {:timer-type :fix-rate :interval a-duration :initial-delay a-duration'})
+  ;; fix-interval
+  {:msg :v0 :fix-interval \"10.ms\"}
+  {:msg :v0 :fix-interval {:interval \"10.ms\"}}
+  {:msg :v0 :fix-interval {:initial-delay \"10.ms\" :interval \"10.ms\"}}
   ```"
-  [msg {:keys [timer-key timer-type interval initial-delay delay]
-        :as opts}]
-  (dsl/start-timer (timers) msg opts))
+  [{:keys [msg single fix-delay fix-rate timer-key] :as t}]
+  (dsl/start-timer (timers) t))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Cluster & receptionist

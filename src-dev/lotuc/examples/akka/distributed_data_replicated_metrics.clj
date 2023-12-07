@@ -145,12 +145,8 @@
      (dsl/with-timers
        (fn [timers]
          (doto timers
-           (dsl/start-timer :Tick    {:timer-key :Tick
-                                      :timer-type :fix-rate
-                                      :interval measure-interval})
-           (dsl/start-timer :Cleanup {:timer-key :Cleanup
-                                      :timer-type :fix-rate
-                                      :interval cleanup-interval}))
+           (dsl/start-timer {:msg :Tick :timer-key :Tick :fix-rate measure-interval})
+           (dsl/start-timer {:msg :Cleanup :timer-key :Cleanup :fix-rate cleanup-interval}))
          (ddata-dsl/with-replicator-message-adapter
            (fn [replicator]
              (let [system (dsl/system context)

@@ -37,10 +37,9 @@
             (when (should-close? state)
               (.tell (.getSelf context) :Close))
             (let [millis-until-closing (- closing-at (.currentTimeMillis replication-context))]
-              (->> {:timer-key :Finish
-                    :timer-type :single
-                    :delay (str millis-until-closing ".millis")}
-                   (dsl/start-timer timers :Finish))))
+              (->> {:msg :Finish :timer-key :Finish
+                    :single (str millis-until-closing ".ms")}
+                   (dsl/start-timer timers))))
 
           (read-only-command-handler [{:keys [phase highest-bid highest-counter-offer] :as state}
                                       {:keys [action reply-to] :as command}]

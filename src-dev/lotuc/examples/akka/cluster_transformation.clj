@@ -30,9 +30,7 @@
         self (dsl/self context)]
     (actor-ref/tell (.receptionist system)
                     (receptionist/subscribe-service worker-service-key self)))
-  (dsl/start-timer timers :Tick {:timer-key :Tick
-                                 :timer-type :fix-rate
-                                 :interval "2.sec"})
+  (dsl/start-timer timers {:msg :Tick :timer-key :Tick :fix-rate "2.sec"})
   (dsl/receive-message
    (fn [{:keys [action] :as m}]
      (or (cond

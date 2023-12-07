@@ -4,7 +4,8 @@
    [clojure.test :refer :all]
    [lotuc.akka.actor.scaladsl :as dsl]
    [lotuc.akka.actor.typed.supervisor-strategy]
-   [lotuc.akka.cnv :as cnv])
+   [lotuc.akka.cnv :as cnv]
+   [lotuc.akka.common.scala :as scala])
   (:import
    (akka.actor.testkit.typed.scaladsl ActorTestKit)
    (akka.actor.typed Behavior)))
@@ -22,6 +23,9 @@
       (.shutdownTestKit test-kit))))
 
 (use-fixtures :each setup-test-kit)
+
+(defn- duration [v]
+  (scala/->scala.concurrent.duration.FiniteDuration v))
 
 (defn- echo-behavior-fn [{:keys [reply-to msg]}]
   (.tell reply-to msg)
@@ -127,3 +131,93 @@
                   echo-actor (.spawn *test-kit* echo)]
               (.tell echo-actor {:reply-to *self* :msg msg})
               (is (.expectMessage *probe* msg)))))))))
+
+(deftest with-timers-test
+  (testing "with-timer-single"
+    (doseq [single ["50.ms" {:delay "50.ms"}]]
+      (testing (str "single delay representation - " (pr-str single))
+        (let [self *self*]
+          (.spawn *test-kit*
+                  (dsl/with-timers
+                    (fn [timers]
+                      (dsl/start-timer timers {:msg :v0 :single single})
+                      (dsl/receive-message (fn [m] (.tell self m) :same)))))
+          (.expectNoMessage *probe* (duration "50.ms"))
+          (is (.expectMessage *probe* :v0))
+          (.expectNoMessage *probe* (duration "50.ms"))))))
+
+  (testing "with-single-fix-delay"
+    (testing "fix-delay (no explicit initial-delay)"
+      (doseq [fix-delay ["50.ms" {:delay "50.ms"}]]
+        (testing (str "representation - " (pr-str fix-delay))
+          (let [self *self* c (atom 0)]
+            (.spawn *test-kit*
+                    (dsl/with-timers
+                      (fn [timers]
+                        (dsl/start-timer timers {:msg :v0 :fix-delay fix-delay})
+                        (dsl/receive-message (fn [m]
+                                               (when (= (swap! c inc) 2)
+                                                 (dsl/cancel-all-timer timers))
+                                               (.tell self m)
+                                               :same)))))
+            ;; the default initial delay
+            (.expectNoMessage *probe* (duration "40.ms"))
+            (is (.expectMessage *probe* (duration "80.ms") :v0))
+            (is (.expectMessage *probe* (duration "80.ms") :v0))
+            (.expectNoMessage *probe* (duration "80.ms"))))))
+    (testing "fix-delay (with explicit initial-delay)"
+      (let [self *self* c (atom 0)]
+        (.spawn *test-kit*
+                (dsl/with-timers
+                  (fn [timers]
+                    (dsl/start-timer timers {:msg :v0 :fix-delay {:delay "50.ms"
+                                                                  :initial-delay "10.ms"}})
+                    (dsl/receive-message (fn [m]
+                                           (when (= (swap! c inc) 3)
+                                             (dsl/cancel-all-timer timers))
+                                           (.tell self m)
+                                           :same)))))
+        ;; initial-delay is 10.ms & delay is 50.ms
+        ;; should receive first message between 10ms-60ms
+        (is (.expectMessage *probe* (duration "50.ms") :v0))
+        (is (.expectMessage *probe* (duration "80.ms") :v0))
+        (is (.expectMessage *probe* (duration "80.ms") :v0))
+        (.expectNoMessage *probe* (duration "80.ms")))))
+
+  (testing "with-single-fix-rate"
+    (testing "fix-rate (no explicit initial-delay)"
+      (doseq [fix-rate ["50.ms" {:interval "50.ms"}]]
+        (testing (str "representation - " (pr-str fix-rate))
+          (let [self *self* c (atom 0)]
+            (.spawn *test-kit*
+                    (dsl/with-timers
+                      (fn [timers]
+                        (dsl/start-timer timers {:msg :v0 :fix-rate fix-rate})
+                        (dsl/receive-message (fn [m]
+                                               (when (= (swap! c inc) 2)
+                                                 (dsl/cancel-all-timer timers))
+                                               (.tell self m)
+                                               :same)))))
+            ;; the default initial delay
+            (.expectNoMessage *probe* (duration "40.ms"))
+            (is (.expectMessage *probe* (duration "80.ms") :v0))
+            (is (.expectMessage *probe* (duration "80.ms") :v0))
+            (.expectNoMessage *probe* (duration "80.ms"))))))
+    (testing "fix-rate (with explicit initial-delay)"
+      (let [self *self* c (atom 0)]
+        (.spawn *test-kit*
+                (dsl/with-timers
+                  (fn [timers]
+                    (dsl/start-timer timers {:msg :v0 :fix-rate {:interval "50.ms"
+                                                                 :initial-delay "10.ms"}})
+                    (dsl/receive-message (fn [m]
+                                           (when (= (swap! c inc) 3)
+                                             (dsl/cancel-all-timer timers))
+                                           (.tell self m)
+                                           :same)))))
+        ;; initial-delay is 10.ms & delay is 50.ms
+        ;; should receive first message between 10ms-60ms
+        (is (.expectMessage *probe* (duration "50.ms") :v0))
+        (is (.expectMessage *probe* (duration "80.ms") :v0))
+        (is (.expectMessage *probe* (duration "80.ms") :v0))
+        (.expectNoMessage *probe* (duration "80.ms"))))))
