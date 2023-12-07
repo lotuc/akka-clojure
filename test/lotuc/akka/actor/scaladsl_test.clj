@@ -232,3 +232,28 @@
         (is (.expectMessage *probe* (duration "80.ms") :v0))
         (is (.expectMessage *probe* (duration "80.ms") :v0))
         (.expectNoMessage *probe* (duration "80.ms"))))))
+
+(deftest monitor-test
+  (let [self *self*]
+    (letfn [(ping-behavior []
+              (dsl/receive-message
+               (fn [m] (.tell self [:from-ping m]) (pong-behavior))))
+            (pong-behavior []
+              (dsl/receive-message
+               (fn [m] (.tell self [:from-pong m]) (ping-behavior))))
+            (monitor-behavior []
+              (dsl/receive-message
+               (fn [m] (.tell self [:from-monitor m]) :same)))]
+      (let [monitor (.spawn *test-kit* (monitor-behavior))
+            ping-pong (.spawn *test-kit* (dsl/monitor (ping-behavior) monitor))]
+        (.tell ping-pong "hello")
+        (let [m0 (.receiveMessage *probe*)
+              m1 (.receiveMessage *probe*)]
+          (is (= #{[:from-monitor "hello"] [:from-ping "hello"]} #{m0 m1})
+              "from monitor & ping"))
+
+        (.tell ping-pong "world")
+        (let [m0 (.receiveMessage *probe*)
+              m1 (.receiveMessage *probe*)]
+          (is (= #{[:from-monitor "world"] [:from-pong "world"]} #{m0 m1})
+              "from monitor & pong"))))))

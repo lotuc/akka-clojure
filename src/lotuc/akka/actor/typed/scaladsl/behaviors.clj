@@ -4,9 +4,12 @@
    [lotuc.akka.common.scala :as scala]
    [lotuc.akka.common.slf4j :as common.log])
   (:import
-   (akka.actor.typed Behavior LogOptions SupervisorStrategy)
-   (akka.actor.typed.scaladsl Behaviors
-                              Behaviors$Supervise)))
+   (akka.actor.typed
+    ActorRef
+    Behavior
+    LogOptions
+    SupervisorStrategy)
+   (akka.actor.typed.scaladsl Behaviors Behaviors$Supervise)))
 
 (set! *warn-on-reflection* true)
 
@@ -117,9 +120,13 @@
       (Behaviors/intercept behavior)))
 
 (defn monitor
-  ([behavior monitor-actor-ref]
+  "Behavior decorator that copies all received message to the designated monitor
+  before invoking the wrapped behavior. The wrapped behavior can evolve (i.e.
+  return different behavior) without needing to be wrapped in a monitor call
+  again."
+  (^Behavior [^Behavior behavior ^ActorRef monitor-actor-ref]
    (Behaviors/monitor monitor-actor-ref behavior (scala/->scala.reflect.ClassTag Object)))
-  ([behavior monitor-actor-ref class-tag-like]
+  (^Behavior [^Behavior behavior ^ActorRef monitor-actor-ref class-tag-like]
    (Behaviors/monitor monitor-actor-ref behavior (scala/->scala.reflect.ClassTag class-tag-like))))
 
 (defn log-messages
