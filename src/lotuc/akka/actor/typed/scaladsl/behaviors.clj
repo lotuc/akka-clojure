@@ -123,8 +123,13 @@
    (Behaviors/monitor monitor-actor-ref behavior (scala/->scala.reflect.ClassTag class-tag-like))))
 
 (defn log-messages
+  "Behavior decorator that logs all messages to given `behavior`.
+
+  ```Clojure
+  (dsl/log-messages (some-behavior) {:enabled true :level :info})
+  ```"
   ([behavior] (Behaviors/logMessages behavior))
-  ([behavior log-options-like] (Behaviors/logMessages behavior (->LogOptions log-options-like))))
+  ([behavior log-options-like] (Behaviors/logMessages (->LogOptions log-options-like) behavior)))
 
 (defn supervise
   ([^Behavior behavior strategy]

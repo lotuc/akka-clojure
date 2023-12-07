@@ -10,8 +10,6 @@
 (potemkin/import-vars
  [lotuc.akka.actor.typed.scaladsl.behaviors
   setup
-  with-stash
-  stopped
   receive
   receive-message
   receive-partial
@@ -19,12 +17,14 @@
   receive-signal
   intercept
   monitor
-  log-messages
   supervise
+  with-stash
+  log-messages
   with-timers
   with-dynamic-mdc
   with-static-mdc
   with-mdc
+  stopped
   ->behavior]
  [lotuc.akka.actor.typed.scaladsl.actor-context
   self

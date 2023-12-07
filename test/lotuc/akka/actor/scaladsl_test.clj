@@ -31,6 +31,9 @@
   (.tell reply-to msg)
   :same)
 
+(defn- echo-behavior []
+  (dsl/receive-message echo-behavior-fn))
+
 (defn- logged-echo-behavior []
   (dsl/receive (fn [ctx {:keys [reply-to msg]}]
                  (.info (.log ctx) "echo: {}" msg)
@@ -101,6 +104,14 @@
     (testing "receive-partial"
       (behavior-on-signal-factory-test
        (fn [on-signal] (dsl/receive-signal (fn [_ signal] (on-signal signal))))))))
+
+(deftest log-messages-test
+  (testing "log messages"
+    (let [echo (dsl/log-messages (echo-behavior) {:enabled true :level :info})
+          echo-actor (.spawn *test-kit* echo)
+          msg "hello world"]
+      (.tell echo-actor {:reply-to *self* :msg msg})
+      (is (.expectMessage *probe* msg)))))
 
 (deftest with-mdc-test
   (let [static-mdc {"mdc.v0" "static"}
