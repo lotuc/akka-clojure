@@ -257,3 +257,37 @@
               m1 (.receiveMessage *probe*)]
           (is (= #{[:from-monitor "world"] [:from-pong "world"]} #{m0 m1})
               "from monitor & pong"))))))
+
+(deftest supervise-test
+  (testing "supervise"
+    (doseq [strategy [nil :restart :resume :stop
+                      {:strategy :restart}
+                      {:strategy :resume}
+                      {:strategy :stop}
+                      {:strategy :backoff
+                       :min "50.ms"
+                       :max "60.ms"
+                       :random-factor 0.2}]]
+      (testing (str "restart=" strategy)
+        (let [a0 (.spawn *test-kit* (cond-> (dsl/receive-message
+                                             (fn [{:keys [reply-to n]}]
+                                               (.tell reply-to (/ 42 n))
+                                               :same))
+                                      strategy (dsl/supervise strategy)))]
+          (.tell a0 {:reply-to *self* :n 2})
+          (is (= 21 (.receiveMessage *probe*)))
+
+         ;; stopped
+          (.tell a0 {:reply-to *self* :n 0})
+          (.tell a0 {:reply-to *self* :n 2})
+          (cond
+            (#{:restart :resume} (cond-> strategy (not (keyword? strategy)) :strategy))
+            (is (= 21 (.receiveMessage *probe*)))
+
+            (or (nil? strategy) (= strategy :stop))
+            (.expectNoMessage *probe*)
+
+            (= :backoff (:strategy strategy))
+            (do
+              (.expectNoMessage *probe* (duration "30.ms"))
+              (is (= 21 (.receiveMessage *probe*))))))))))

@@ -5,7 +5,8 @@
    [lotuc.akka.actor.typed.scaladsl.behaviors]
    [lotuc.akka.actor.typed.scaladsl.actor-context]
    [lotuc.akka.actor.typed.scaladsl.timer-scheduler]
-   [lotuc.akka.actor.typed.scaladsl.routers]))
+   [lotuc.akka.actor.typed.scaladsl.routers]
+   [lotuc.akka.actor.typed.supervisor-strategy]))
 
 (potemkin/import-vars
  [lotuc.akka.actor.typed.scaladsl.behaviors

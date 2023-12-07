@@ -139,6 +139,18 @@
   ([behavior log-options-like] (Behaviors/logMessages (->LogOptions log-options-like) behavior)))
 
 (defn supervise
+  "Supervise `behavior` with given `strategy`.
+
+  ```Clojure
+  (supervise behavior :restart)
+  (supervise behavior :resume)
+  (supervise behavior :stop)
+
+  ;; more verbose form
+  (supervise behavior {:strategy :restart})
+  (supervise behavior {:strategy :backoff :min \"50.ms\" :max \"60.ms\" :random-factor 0.2})
+  ```
+"
   ([^Behavior behavior strategy]
    (-> (Behaviors$Supervise. behavior)
        (.onFailure (->SupervisorStrategy strategy) (scala.reflect.ClassTag/Any))))
