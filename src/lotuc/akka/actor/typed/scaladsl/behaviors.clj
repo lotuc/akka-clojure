@@ -10,7 +10,7 @@
 
 (set! *warn-on-reflection* true)
 
-(defn ->behavior [behavior-like]
+(defn ->behavior ^Behavior [behavior-like]
   (or ({:same      (Behaviors/same)
         :stopped   (Behaviors/stopped)
         :empty     (Behaviors/empty)
@@ -18,9 +18,9 @@
         :unhandled (Behaviors/unhandled)}
        behavior-like)
       (when (instance? akka.actor.typed.Behavior behavior-like) behavior-like)
-      (throw (ex-info (str "invalid behavior: " (type behavior-like)) {:value behavior-like}))))
+      (throw (ex-info (str "invalid behavior: " behavior-like) {:value behavior-like}))))
 
-(defn ->LogOptions
+(defn- ->LogOptions
   ([] (LogOptions/apply))
   ([{:keys [^boolean enabled level ^org.slf4j.Logger logger] :as v}]
    (cond-> (LogOptions/apply)
@@ -28,7 +28,7 @@
      (some? level)   (.withLevel (common.log/->LogLevel level))
      (some? logger)  (.withLogger logger))))
 
-(defn ->SupervisorStrategy
+(defn- ->SupervisorStrategy
   ^SupervisorStrategy [{:keys [strategy] :as v}]
   (or (and (instance? SupervisorStrategy v) v)
       (and (keyword? v) (cnv/->akka {:dtype :SupervisorStrategy :strategy v}))
@@ -93,15 +93,13 @@
        Behaviors/receivePartial)))
 
 (defn receive-message-partial
-  ([on-ctx-msg]
-   (receive-message-partial on-ctx-msg (constantly true)))
-  ([on-ctx-msg defined-at?]
+  ([on-msg]
+   (receive-message-partial on-msg (constantly true)))
+  ([on-msg defined-at?]
    (-> (reify scala.PartialFunction
-         (isDefinedAt [_ v]
-           (let [^scala.Tuple2 v v] (defined-at? (._1 v) (._2 v))))
-         (apply [_ v]
-           (let [^scala.Tuple2 v v] (->behavior (on-ctx-msg (._1 v) (._2 v))))))
-       Behaviors/receivePartial)))
+         (isDefinedAt [_ v] (defined-at? v))
+         (apply [_ v] (->behavior (on-msg v))))
+       Behaviors/receiveMessagePartial)))
 
 (defn receive-signal
   ([on-ctx-signal]
@@ -144,12 +142,16 @@
 
 (defn with-dynamic-mdc
   ([^Behavior behavior mdc-for-message]
-   (Behaviors/withMdc (reify scala.Function1 (apply [_ msg] (mdc-for-message msg)))
+   (Behaviors/withMdc (reify scala.Function1
+                        (apply [_ msg]
+                          (scala/->scala.collection.immutable.Map (mdc-for-message msg))))
                       behavior
                       (scala.reflect.ClassTag/Any)))
   ([^Behavior behavior mdc-for-message class-tag-like]
    (let [^scala.reflect.ClassTag tag (scala/->scala.reflect.ClassTag class-tag-like)]
-     (Behaviors/withMdc (reify scala.Function1 (apply [_ msg] (mdc-for-message msg)))
+     (Behaviors/withMdc (reify scala.Function1
+                          (apply [_ msg]
+                            (scala/->scala.collection.immutable.Map (mdc-for-message msg))))
                         behavior
                         tag))))
 
@@ -171,7 +173,9 @@
      (and static-mdc mdc-for-message)
      (Behaviors/withMdc
       (scala/->scala.collection.immutable.Map static-mdc)
-      (reify scala.Function1 (apply [_ msg] (mdc-for-message msg)))
+      (reify scala.Function1
+        (apply [_ msg]
+          (scala/->scala.collection.immutable.Map (mdc-for-message msg))))
       behavior
       (scala/->scala.reflect.ClassTag class-tag-like))
 
