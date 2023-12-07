@@ -11,16 +11,18 @@
     `scala.reflect.ClassTag/Object
 
     :else
-    `(let [v# ~v]
+    `(let [^scala.reflect.ClassTag v# ~v]
        (cond
          (instance? scala.reflect.ClassTag v#) v#
          (= java.lang.Class (type v#)) (scala.reflect.ClassTag/apply v#)))))
 
 (defmacro ->scala.collection.immutable.Map [v]
-  `(reduce
-    (fn [r# [k# v#]] (.updated r# k# v#))
-    (scala.collection.immutable.HashMap.)
-    ~v))
+  `(let [^scala.collection.immutable.Map r#
+         (reduce
+          (fn [^scala.collection.immutable.HashMap r# [k# v#]] (.updated r# k# v#))
+          (scala.collection.immutable.HashMap.)
+          ~v)]
+     r#))
 
 (defn ->scala.concurrent.duration.FiniteDuration
   ^scala.concurrent.duration.FiniteDuration [duration]

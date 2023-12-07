@@ -11,7 +11,8 @@
           :ns-default build}
   :test {:extra-paths ["test"]
          :extra-deps {org.clojure/test.check {:mvn/version "1.1.1"}
-                      io.github.cognitect-labs/test-runner {:git/tag "v0.5.0" :git/sha "48c3c67"}}}
+                      io.github.cognitect-labs/test-runner {:git/tag "v0.5.0" :git/sha "48c3c67"}
+                      com.typesafe.akka/akka-actor-testkit-typed_2.13 {:mvn/version "2.9.0"}}}
   :dev {:extra-paths ["src-dev" "target/build/src-java/classes"]
         :extra-deps {org.clojure/tools.namespace {:mvn/version "1.4.4"}
                      com.lambdaisland/classpath {:mvn/version "0.4.44"}
