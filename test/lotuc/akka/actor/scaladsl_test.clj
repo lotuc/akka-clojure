@@ -5,7 +5,8 @@
    [lotuc.akka.actor.scaladsl :as dsl]
    [lotuc.akka.actor.typed.supervisor-strategy]
    [lotuc.akka.cnv :as cnv]
-   [lotuc.akka.common.scala :as scala])
+   [lotuc.akka.common.scala :as scala]
+   [lotuc.akka.pattern.status-reply :as status-reply])
   (:import
    (akka.actor.testkit.typed.scaladsl ActorTestKit)
    (akka.actor.typed Behavior)))
@@ -323,3 +324,52 @@
             (do
               (.expectNoMessage *probe* (duration "30.ms"))
               (is (= 21 (.receiveMessage *probe*))))))))))
+
+(defn- ask-sample-worker [status-reply?]
+  (dsl/receive-message
+   (fn [{:keys [reply-to op n]}]
+     (.tell reply-to
+            (if status-reply?
+              (status-reply/status-reply-of ((case op :inc inc :dec dec) n))
+              ;; no error handling here
+              ((case op :inc inc :dec dec) n)))
+     :same)))
+
+(defn- ask-sample-client [status-reply?]
+  (let [!server (atom nil)]
+    (dsl/receive
+     (fn [ctx {:keys [action] :as m}]
+       (when-not @!server
+         (reset! !server (.spawnAnonymous ctx (ask-sample-worker status-reply?))))
+       (case action
+         :asking
+         (let [{:keys [reply-to op n]} m]
+           ((if status-reply? dsl/ask-with-status  dsl/ask)
+            ctx
+            @!server
+            (fn [reply-to]
+              {:reply-to reply-to
+               :op op :n n})
+            (fn [ok err]
+              {:action :server-response
+               :reply-to reply-to :resp (or err ok)})
+            "50.ms"))
+         :server-response
+         (let [{:keys [reply-to resp]} m]
+           (.tell reply-to resp)))
+       :same))))
+
+(deftest actor-context-test
+  (doseq [status-reply? [false true]]
+    (testing (if status-reply? "ask-with-status" "ask")
+      (let [client-actor (.spawn *test-kit* (ask-sample-client status-reply?))]
+        (.tell client-actor {:action :asking :reply-to *self* :op :inc :n 41})
+        (is (= 42 (.receiveMessage *probe*)))
+
+        (.tell client-actor {:action :asking :reply-to *self* :op :dec :n 41})
+        (is (= 40 (.receiveMessage *probe*)))
+
+        (.tell client-actor {:action :asking :reply-to *self* :op :unkown-op :n 41})
+        (if status-reply?
+          (is (instance? IllegalArgumentException (.receiveMessage *probe*)))
+          (is (instance? java.util.concurrent.TimeoutException (.receiveMessage *probe*))))))))

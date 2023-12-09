@@ -79,6 +79,14 @@
                     (scala/->scala.reflect.ClassTag class-tag-like))))
 
 (defn ask
+  "Perform a single request-response message interaction with another actor, and
+  transform the messages back to the protocol of this actor.
+
+  ```Clojure
+  (ask ctx target
+    (fn [reply-to] ...build request...)
+    (fn [ok err] ...build msg which will be piping to self...))
+  ```"
   ([^ActorContext ctx
     ^RecipientRef target
     create-request-fn
@@ -109,6 +117,13 @@
         (scala.reflect.ClassTag/Any))))
 
 (defn ask-with-status
+  "The same as [[ask]] but only for requests that result in a response of type [[akka.pattern.StatusReply]].
+
+  ```Clojure
+  (ask ctx target
+    (fn [reply-to] ...build request...)
+    (fn [ok err] ...build msg which will be piping to self...))
+  ```"
   ([^ActorContext ctx
     ^RecipientRef target
     create-request-fn
@@ -118,7 +133,11 @@
    (.askWithStatus ctx
                    target
                    (reify scala.Function1 (apply [_ reply-to] (create-request-fn reply-to)))
-                   (reify scala.Function1 (apply [_ response] (map-response response)))
+                   (reify scala.Function1 (apply [_ response]
+                                            (let [^scala.util.Try try-res response]
+                                              (try (map-response (.get try-res) nil)
+                                                   (catch Throwable t
+                                                     (map-response nil t))))))
                    (akka.util.Timeout/apply (scala/->scala.concurrent.duration.FiniteDuration timeout))
                    (scala/->scala.reflect.ClassTag class-tag-like)))
   ([^ActorContext ctx
@@ -126,12 +145,8 @@
     create-request-fn
     map-response
     timeout]
-   (.askWithStatus ctx
-                   target
-                   (reify scala.Function1 (apply [_ reply-to] (create-request-fn reply-to)))
-                   (reify scala.Function1 (apply [_ response] (map-response response)))
-                   (akka.util.Timeout/apply (scala/->scala.concurrent.duration.FiniteDuration timeout))
-                   (scala.reflect.ClassTag/Any))))
+   (ask-with-status ctx target create-request-fn map-response timeout
+                    (scala.reflect.ClassTag/Any))))
 
 (defn pipe-to-self [^ActorContext ctx
                     ^scala.concurrent.Future future-val
