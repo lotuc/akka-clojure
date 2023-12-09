@@ -233,6 +233,38 @@
         (is (.expectMessage *probe* (duration "80.ms") :v0))
         (.expectNoMessage *probe* (duration "80.ms"))))))
 
+(deftest with-stash-test
+  (testing "with-statsh"
+    (let [self *self*
+          actor (.spawn *test-kit*
+                        (letfn [(echo-42 [stash]
+                                  (let [!count (atom 0)]
+                                    (dsl/receive-message
+                                     (fn [[from msg :as m]]
+                                       (if (= from 42)
+                                         (do (.tell self [:echo-42 msg])
+                                             (if (< (swap! !count inc) 2)
+                                               :same
+                                               (.unstashAll stash (echo-others))))
+                                         (do (.stash stash m) :same))))))
+                                (echo-others []
+                                  (dsl/receive-message
+                                   (fn [[from msg]]
+                                     (.tell self [:echo-others from msg])
+                                     :same)))]
+                          (dsl/with-stash 100 echo-42)))]
+      (.tell actor [42 "hello"])
+      (is (= [:echo-42 "hello"] (.receiveMessage *probe*)))
+
+      (.tell actor [41 "hello"])
+      (.tell actor [43 "world"])
+
+      (.tell actor [42 "world"])
+      (is (= [:echo-42 "world"] (.receiveMessage *probe*)))
+
+      (is (= [:echo-others 41 "hello"] (.receiveMessage *probe*)))
+      (is (= [:echo-others 43 "world"] (.receiveMessage *probe*))))))
+
 (deftest monitor-test
   (let [self *self*]
     (letfn [(ping-behavior []
