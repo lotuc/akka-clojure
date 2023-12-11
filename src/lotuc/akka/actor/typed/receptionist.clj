@@ -46,6 +46,21 @@
 (defn receptionist-listing? [v]
   (instance? Receptionist$Listing v))
 
+(defn receptionist-listing-get-key [^Receptionist$Listing v]
+  (.getKey v))
+
+(defn receptionist-listing-service-were-added-or-removed? [^Receptionist$Listing v]
+  (.servicesWereAddedOrRemoved v))
+
+(defn receptionist-listing-for-key? [^Receptionist$Listing v k]
+  (.getServiceInstances v (->ServiceKey k)))
+
+(defn receptionist-listing-get-service-instances [^Receptionist$Listing v k]
+  (.getServiceInstances v (->ServiceKey k)))
+
+(defn receptionist-listing-get-all-service-instances [^Receptionist$Listing v k]
+  (.getAllServiceInstances v (->ServiceKey k)))
+
 (defmethod cnv/->clj Receptionist$Listing [^Receptionist$Listing v]
   {:dtype :receptionist-listing
    :service-key (.getKey v)
